@@ -9,6 +9,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod commands;
 mod config;
+mod services;
 
 /// Initialize structured logging with JSON output in production
 fn init_logging() {
