@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from ..config import settings
+from ..services import check_database_connection, check_redis_connection
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -16,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 class ServiceStatus(BaseModel):
     """Status of individual services."""
-    database: str = "not_configured"
-    redis: str = "not_configured"
-    valhalla: str = "not_configured"
+    database: str = "disconnected"
+    redis: str = "disconnected"
+    valhalla: str = "pending"
 
 
 class HealthResponse(BaseModel):
@@ -37,22 +38,26 @@ async def health_check() -> HealthResponse:
     Returns:
         HealthResponse: Current health status of all services.
     """
-    # For Week 1, we return a basic healthy status
-    # In Week 2, we'll add actual dependency checks
+    # Check actual service connections
+    db_connected = await check_database_connection()
+    redis_connected = await check_redis_connection()
     
     services = ServiceStatus(
-        database="pending",  # Will be implemented in Week 2
-        redis="pending",     # Will be implemented in Week 2
-        valhalla="pending"   # Will be implemented in Week 7
+        database="connected" if db_connected else "disconnected",
+        redis="connected" if redis_connected else "disconnected",
+        valhalla="pending"  # Will be implemented in Week 7
     )
+    
+    # Determine overall health
+    is_healthy = db_connected and redis_connected
     
     logger.info(
         "Health check performed",
-        extra={"context": {"services": services.model_dump()}}
+        extra={"context": {"services": services.model_dump(), "healthy": is_healthy}}
     )
     
     return HealthResponse(
-        status="healthy",
+        status="healthy" if is_healthy else "degraded",
         version=settings.VERSION,
         environment=settings.ENVIRONMENT,
         services=services

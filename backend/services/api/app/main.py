@@ -11,7 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .logging_config import setup_logging
 from .api import health
+from .api import enrich
 from .middleware.logging import LoggingMiddleware
+from .services import init_database, close_database, close_redis
 
 
 @asynccontextmanager
@@ -27,10 +29,15 @@ async def lifespan(app: FastAPI):
         extra={"context": {"version": settings.VERSION, "environment": settings.ENVIRONMENT}}
     )
     
+    # Initialize services
+    await init_database()
+    
     yield
     
     # Shutdown
-    logger.info("Shutting down GeoTruth API")
+    await close_database()
+    await close_redis()
+    logger.info("GeoTruth API shutdown complete")
 
 
 # Create FastAPI application
@@ -57,6 +64,7 @@ app.add_middleware(LoggingMiddleware)
 
 # Include routers
 app.include_router(health.router, prefix="/v1", tags=["Health"])
+app.include_router(enrich.router, prefix="/v1", tags=["Enrichment"])
 
 
 @app.get("/")
