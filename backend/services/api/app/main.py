@@ -12,6 +12,8 @@ from .config import settings
 from .logging_config import setup_logging
 from .api import health
 from .api import enrich
+from .api import map_match
+from .api import narrate
 from .middleware.logging import LoggingMiddleware
 from .services import init_database, close_database, close_redis
 
@@ -65,6 +67,8 @@ app.add_middleware(LoggingMiddleware)
 # Include routers
 app.include_router(health.router, prefix="/v1", tags=["Health"])
 app.include_router(enrich.router, prefix="/v1", tags=["Enrichment"])
+app.include_router(map_match.router, prefix="/v1", tags=["Map Matching"])
+app.include_router(narrate.router, prefix="/v1", tags=["AI Narration"])
 
 
 @app.get("/")
