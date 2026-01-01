@@ -1,27 +1,39 @@
 # Backend Services
 
-The GeoTruth backend is a cloud-based geospatial intelligence layer that provides map matching, POI discovery, and AI narration services. This document covers setup, configuration, and deployment.
+The GeoTruth backend is a **100% Docker-based** geospatial intelligence layer. No local Python, database, or routing engine installation required.
 
 ---
 
-## 🏗️ Architecture
+## 🐳 Zero Local Dependencies
+
+Everything runs in isolated Docker containers:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Docker Compose Stack                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   ┌──────────────┐     ┌──────────────┐     ┌────────────┐  │
-│   │  FastAPI     │────▶│    Redis     │     │  PostGIS   │  │
-│   │  (api:8000)  │     │  (cache:6379)│     │  (db:5432) │  │
-│   └──────┬───────┘     └──────────────┘     └─────┬──────┘  │
-│          │                                         │         │
-│          │         ┌───────────────────┐          │         │
-│          └────────▶│     Valhalla      │◀─────────┘         │
-│                    │ (routing:8002)    │                    │
-│                    └───────────────────┘                    │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     Docker Compose Stack                         │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐ │
+│  │  api         │   │  geo-db      │   │  map-matcher         │ │
+│  │  Python 3.12 │   │  PostgreSQL  │   │  Valhalla 3.5        │ │
+│  │  FastAPI     │   │  17 + Post-  │   │                      │ │
+│  │              │   │  GIS 3.5     │   │                      │ │
+│  │  Port: 8000  │   │  Port: 5432  │   │  Port: 8002          │ │
+│  └──────┬───────┘   └──────┬───────┘   └──────────┬───────────┘ │
+│         │                  │                      │              │
+│         └──────────────────┴──────────────────────┘              │
+│                            │                                     │
+│                    ┌───────┴───────┐                            │
+│                    │     cache     │                            │
+│                    │   Redis 7.4   │                            │
+│                    │   Port: 6379  │                            │
+│                    └───────────────┘                            │
+├─────────────────────────────────────────────────────────────────┤
+│                    Isolated Networks                             │
+│  ┌─────────────────────┐    ┌─────────────────────────────────┐ │
+│  │  frontend-network   │    │  backend-network (internal)     │ │
+│  │  (api exposed)      │    │  (db, cache, matcher isolated)  │ │
+│  └─────────────────────┘    └─────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -30,42 +42,31 @@ The GeoTruth backend is a cloud-based geospatial intelligence layer that provide
 
 ```
 /backend
-├── /app
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application entry
-│   ├── config.py            # Settings management
-│   ├── /api
-│   │   ├── __init__.py
-│   │   ├── routes.py        # API route definitions
-│   │   ├── deps.py          # Dependencies (auth, db)
-│   │   └── /v1
-│   │       ├── enrich.py    # Enrichment endpoints
-│   │       ├── narrate.py   # AI narration endpoints
-│   │       └── health.py    # Health checks
-│   ├── /services
-│   │   ├── map_matcher.py   # Valhalla integration
-│   │   ├── poi_service.py   # PostGIS queries
-│   │   ├── cache_service.py # Redis caching
-│   │   └── ai_service.py    # Gemini integration
-│   ├── /models
-│   │   ├── requests.py      # Pydantic request models
-│   │   ├── responses.py     # Pydantic response models
-│   │   └── database.py      # SQLAlchemy models
-│   └── /utils
-│       ├── geo.py           # Geospatial utilities
-│       └── fov.py           # Field-of-view calculations
-├── /docker
-│   ├── Dockerfile.api       # API server image
-│   ├── Dockerfile.valhalla  # Routing engine image
-│   └── postgis-init.sql     # Database initialization
-├── /scripts
-│   ├── init-db.sh           # Database setup script
-│   ├── import-osm.sh        # OpenStreetMap data import
-│   └── seed-pois.py         # POI seeding script
-├── docker-compose.yml       # Service orchestration
-├── docker-compose.prod.yml  # Production overrides
-├── requirements.txt         # Python dependencies
-└── .env.example             # Environment template
+├── /services
+│   ├── /api                     # FastAPI application
+│   │   ├── Dockerfile           # Multi-stage build
+│   │   ├── requirements.txt     # Pinned to latest
+│   │   └── /app
+│   │       ├── main.py          # Application entry
+│   │       ├── config.py        # Pydantic settings
+│   │       ├── logging_config.py # Structured logging
+│   │       ├── /api             # Route handlers
+│   │       ├── /services        # Business logic
+│   │       ├── /models          # Pydantic models
+│   │       └── /middleware      # Logging, auth, CORS
+│   ├── /geo-db                  # PostGIS container
+│   │   ├── Dockerfile
+│   │   └── /init-scripts        # Database initialization
+│   ├── /map-matcher             # Valhalla container
+│   │   ├── Dockerfile
+│   │   └── /config              # Routing configuration
+│   └── /cache                   # Redis container
+│       └── redis.conf           # Custom configuration
+├── docker-compose.yml           # Production stack
+├── docker-compose.dev.yml       # Development with hot reload
+├── docker-compose.test.yml      # Testing stack
+├── .env.example                 # Environment template
+└── Makefile                     # Convenience commands
 ```
 
 ---
@@ -74,183 +75,234 @@ The GeoTruth backend is a cloud-based geospatial intelligence layer that provide
 
 ### Prerequisites
 
-- Docker 24.x+
-- Docker Compose 2.x+
-- 8GB+ RAM (for Valhalla routing)
-- 50GB+ disk space (for map data)
+- **Docker** 24.0+ with Compose v2
+- **8GB+ RAM** (for Valhalla routing)
+- **50GB+ disk** (for map data)
 
-### Development Setup
+### Start Services
 
 ```bash
-# Clone and navigate
-cd backend
+# Clone repository
+git clone https://github.com/your-org/geotruth-narrative-engine.git
+cd geotruth-narrative-engine/backend
 
-# Copy environment file
+# Copy environment template
 cp .env.example .env
 
-# Edit with your API keys
-vim .env
+# Edit with your API keys (GEMINI_API_KEY required)
+nano .env
 
-# Start services
-docker-compose up -d
+# Start all services
+docker compose up -d
 
 # Check status
-docker-compose ps
+docker compose ps
 
-# View logs
-docker-compose logs -f api
+# View all logs
+docker compose logs -f
+
+# View specific service logs
+docker compose logs -f api
 ```
 
-### Initialize Database
+### Verify Installation
 
 ```bash
-# Run database migrations
-docker-compose exec api alembic upgrade head
+# Health check
+curl http://localhost:8000/v1/health
 
-# Seed initial POI data
-docker-compose exec api python scripts/seed-pois.py
+# Expected response:
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "services": {
+    "database": "connected",
+    "redis": "connected",
+    "valhalla": "connected"
+  }
+}
 ```
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Docker Configuration
 
-### Environment Variables
-
-```bash
-# .env file
-
-# Database
-POSTGRES_HOST=geo-db
-POSTGRES_PORT=5432
-POSTGRES_USER=geotruth
-POSTGRES_PASSWORD=your_secure_password
-POSTGRES_DB=geotruth
-
-# Redis
-REDIS_URL=redis://cache:6379/0
-
-# Valhalla
-VALHALLA_URL=http://map-matcher:8002
-
-# AI Services
-GEMINI_API_KEY=your_gemini_api_key
-
-# Security
-JWT_SECRET=your_jwt_secret_key
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=1440
-
-# Logging
-LOG_LEVEL=INFO
-```
-
-### Python Settings (pydantic-settings)
-
-```python
-# app/config.py
-
-from pydantic_settings import BaseSettings
-from functools import lru_cache
-
-class Settings(BaseSettings):
-    # Database
-    postgres_host: str
-    postgres_port: int = 5432
-    postgres_user: str
-    postgres_password: str
-    postgres_db: str
-    
-    # Redis
-    redis_url: str
-    
-    # Valhalla
-    valhalla_url: str
-    
-    # AI
-    gemini_api_key: str
-    
-    # Security
-    jwt_secret: str
-    jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 1440
-    
-    # Logging
-    log_level: str = "INFO"
-    
-    @property
-    def database_url(self) -> str:
-        return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
-
-@lru_cache()
-def get_settings() -> Settings:
-    return Settings()
-```
-
----
-
-## 🐳 Docker Configuration
-
-### docker-compose.yml
+### docker-compose.yml (Production)
 
 ```yaml
-version: '3.8'
+version: '3.9'
 
 services:
+  # ==========================================================================
+  # API Server - FastAPI
+  # ==========================================================================
   api:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.api
+      context: ./services/api
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: "3.12"
+    image: geotruth/api:latest
+    container_name: geotruth-api
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
       - POSTGRES_HOST=geo-db
+      - POSTGRES_PORT=5432
       - REDIS_URL=redis://cache:6379/0
       - VALHALLA_URL=http://map-matcher:8002
     env_file:
       - .env
     depends_on:
-      - geo-db
-      - cache
-      - map-matcher
-    volumes:
-      - ./app:/app/app:ro
-    restart: unless-stopped
+      geo-db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      map-matcher:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        labels: "service"
 
+  # ==========================================================================
+  # PostGIS Database
+  # ==========================================================================
   geo-db:
-    image: postgis/postgis:15-3.3
+    image: postgis/postgis:17-3.5-alpine
+    container_name: geotruth-db
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER:-geotruth}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Database password required}
+      - POSTGRES_DB=${POSTGRES_DB:-geotruth}
+      - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgis-init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
+      - ./services/geo-db/init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - backend
+    expose:
+      - "5432"
+    # NOT exposed to host for security - only internal access
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-geotruth} -d ${POSTGRES_DB:-geotruth}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
+  # ==========================================================================
+  # Redis Cache
+  # ==========================================================================
   cache:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    image: redis:7.4-alpine
+    container_name: geotruth-cache
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
     volumes:
       - redis_data:/data
-    restart: unless-stopped
+      - ./services/cache/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - backend
+    expose:
+      - "6379"
+    # NOT exposed to host for security - only internal access
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
+  # ==========================================================================
+  # Valhalla Map Matching
+  # ==========================================================================
   map-matcher:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.valhalla
-    ports:
-      - "8002:8002"
-    volumes:
-      - valhalla_tiles:/data/valhalla
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    container_name: geotruth-valhalla
     restart: unless-stopped
+    environment:
+      - tile_urls=https://download.geofabrik.de/north-america-latest.osm.pbf
+      - serve_tiles=True
+      - build_elevation=False
+      - build_admins=True
+      - build_time_zones=True
+    volumes:
+      - valhalla_tiles:/custom_files
+    networks:
+      - backend
+    expose:
+      - "8002"
+    # NOT exposed to host for security - only internal access
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s  # Valhalla takes time to build tiles
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true  # No external access to backend network
 
 volumes:
   postgres_data:
@@ -258,317 +310,456 @@ volumes:
   valhalla_tiles:
 ```
 
-### Dockerfile.api
+### docker-compose.dev.yml (Development)
+
+```yaml
+version: '3.9'
+
+# Development overrides - extends docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./services/api/app:/app/app:cached
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=pretty
+      - RELOAD=true
+    ports:
+      - "8000:8000"
+
+  geo-db:
+    ports:
+      - "5432:5432"  # Expose for development tools
+
+  cache:
+    ports:
+      - "6379:6379"  # Expose for development tools
+```
+
+---
+
+## 🏗️ Dockerfile (API Server)
 
 ```dockerfile
+# =============================================================================
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+# =============================================================================
+FROM python:3.12-slim AS builder
 
-WORKDIR /app
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 
-# Stage 2: Runner
-FROM python:3.11-slim
+# =============================================================================
+# Stage 2: Runtime
+# =============================================================================
+FROM python:3.12-slim AS runtime
+
+# Labels for container identification
+LABEL org.opencontainers.image.title="GeoTruth API"
+LABEL org.opencontainers.image.description="Geospatial intelligence API for GeoTruth"
+LABEL org.opencontainers.image.version="1.0.0"
 
 WORKDIR /app
 
-# Install system dependencies for Geo (GDAL/PROJ)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libgdal-dev \
-        libgeos-dev \
-        libproj-dev && \
-    rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libgdal-dev \
+    libgeos-dev \
+    libproj-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Install Python packages
-COPY --from=builder /app/wheels /wheels
-COPY --from=builder /app/requirements.txt .
-RUN pip install --no-cache /wheels/*
+# Install Python packages from wheels
+COPY --from=builder /build/wheels /wheels
+COPY --from=builder /build/requirements.txt .
+RUN pip install --no-cache-dir --no-index /wheels/* \
+    && rm -rf /wheels
 
-# Copy application
+# Copy application code
 COPY ./app ./app
 
-# Create non-root user
-RUN useradd -m -u 1000 geotruth && \
-    chown -R geotruth:geotruth /app
+# Create non-root user for security
+RUN groupadd -r geotruth && useradd -r -g geotruth geotruth \
+    && chown -R geotruth:geotruth /app
 USER geotruth
 
-# Production server
+# Environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/v1/health || exit 1
+
+# Run with production server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 ```
 
 ---
 
-## 📊 Database Schema
+## 📊 Structured Logging
 
-### Core Tables
+All services use structured JSON logging with correlation IDs for request tracing.
 
-```sql
--- PostGIS Extension
-CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS postgis_topology;
+### Logging Configuration
 
--- POIs (Points of Interest)
-CREATE TABLE pois (
-    id SERIAL PRIMARY KEY,
-    osm_id BIGINT UNIQUE,
-    name TEXT NOT NULL,
-    name_local TEXT,
-    category TEXT NOT NULL,
-    subcategory TEXT,
-    geom GEOMETRY(Point, 4326) NOT NULL,
-    tags JSONB DEFAULT '{}',
-    facts JSONB DEFAULT '{}',
-    source TEXT DEFAULT 'osm',
-    confidence FLOAT DEFAULT 0.8,
-    verified BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
+```python
+# app/logging_config.py
 
--- Spatial index
-CREATE INDEX idx_pois_geom ON pois USING GIST (geom);
-CREATE INDEX idx_pois_category ON pois (category);
-CREATE INDEX idx_pois_name ON pois USING GIN (to_tsvector('english', name));
+import logging
+import sys
+import json
+from datetime import datetime, timezone
+from typing import Any
+import uuid
+from contextvars import ContextVar
 
--- Regions (Countries, States, Counties)
-CREATE TABLE regions (
-    id SERIAL PRIMARY KEY,
-    osm_id BIGINT UNIQUE,
-    name TEXT NOT NULL,
-    admin_level INT NOT NULL,
-    parent_id INT REFERENCES regions(id),
-    geom GEOMETRY(MultiPolygon, 4326) NOT NULL,
-    timezone TEXT,
-    country_code CHAR(2)
-);
+# Context variable for correlation ID
+correlation_id_var: ContextVar[str] = ContextVar('correlation_id', default='')
 
-CREATE INDEX idx_regions_geom ON regions USING GIST (geom);
+class StructuredFormatter(logging.Formatter):
+    """JSON structured log formatter."""
+    
+    def format(self, record: logging.LogRecord) -> str:
+        log_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "service": "api",
+            "logger": record.name,
+            "message": record.getMessage(),
+            "correlation_id": correlation_id_var.get() or None,
+        }
+        
+        # Add extra fields
+        if hasattr(record, 'context'):
+            log_entry["context"] = record.context
+        
+        # Add exception info if present
+        if record.exc_info:
+            log_entry["exception"] = self.formatException(record.exc_info)
+        
+        # Add source location for debugging
+        log_entry["source"] = {
+            "file": record.pathname,
+            "line": record.lineno,
+            "function": record.funcName
+        }
+        
+        return json.dumps(log_entry)
 
--- Road Segments (for offline matching)
-CREATE TABLE road_segments (
-    id SERIAL PRIMARY KEY,
-    osm_way_id BIGINT,
-    name TEXT,
-    road_class TEXT,
-    oneway BOOLEAN DEFAULT FALSE,
-    geom GEOMETRY(LineString, 4326) NOT NULL,
-    tags JSONB DEFAULT '{}'
-);
 
-CREATE INDEX idx_roads_geom ON road_segments USING GIST (geom);
+class PrettyFormatter(logging.Formatter):
+    """Human-readable formatter for development."""
+    
+    COLORS = {
+        'DEBUG': '\033[36m',    # Cyan
+        'INFO': '\033[32m',     # Green
+        'WARNING': '\033[33m',  # Yellow
+        'ERROR': '\033[31m',    # Red
+        'CRITICAL': '\033[35m', # Magenta
+    }
+    RESET = '\033[0m'
+    
+    def format(self, record: logging.LogRecord) -> str:
+        color = self.COLORS.get(record.levelname, self.RESET)
+        correlation = correlation_id_var.get()
+        corr_str = f"[{correlation[:8]}] " if correlation else ""
+        
+        return (
+            f"{color}{record.levelname:8}{self.RESET} "
+            f"{corr_str}"
+            f"{record.getMessage()}"
+        )
+
+
+def setup_logging(log_level: str = "INFO", log_format: str = "json"):
+    """Configure structured logging for the application."""
+    
+    # Create formatter based on environment
+    if log_format == "json":
+        formatter = StructuredFormatter()
+    else:
+        formatter = PrettyFormatter()
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, log_level.upper()))
+    
+    # Remove existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Add stdout handler
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+    
+    # Reduce noise from third-party libraries
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    
+    return root_logger
 ```
 
-### Useful Queries
+### Logging Middleware
 
-```sql
--- Find POIs within radius
-SELECT 
-    id, name, category,
-    ST_Distance(geom::geography, ST_MakePoint($1, $2)::geography) as distance_m
-FROM pois
-WHERE ST_DWithin(
-    geom::geography,
-    ST_MakePoint($1, $2)::geography,
-    $3  -- radius in meters
-)
-ORDER BY distance_m
-LIMIT 50;
+```python
+# app/middleware/logging.py
 
--- Reverse geocode (find region)
-SELECT 
-    name, admin_level, timezone
-FROM regions
-WHERE ST_Contains(geom, ST_MakePoint($1, $2))
-ORDER BY admin_level DESC;
+import time
+import uuid
+import logging
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from ..logging_config import correlation_id_var
 
--- Find nearest road
-SELECT 
-    name, road_class,
-    ST_Distance(geom::geography, ST_MakePoint($1, $2)::geography) as distance_m
-FROM road_segments
-ORDER BY geom <-> ST_MakePoint($1, $2)
-LIMIT 1;
+logger = logging.getLogger(__name__)
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware for request/response logging with correlation IDs."""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Generate or extract correlation ID
+        correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
+        correlation_id_var.set(correlation_id)
+        
+        # Log request
+        start_time = time.perf_counter()
+        logger.info(
+            "Request started",
+            extra={
+                "context": {
+                    "method": request.method,
+                    "path": request.url.path,
+                    "client_ip": request.client.host if request.client else None,
+                    "user_agent": request.headers.get("user-agent"),
+                }
+            }
+        )
+        
+        try:
+            response = await call_next(request)
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            
+            # Log response
+            logger.info(
+                "Request completed",
+                extra={
+                    "context": {
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status_code": response.status_code,
+                        "duration_ms": round(duration_ms, 2),
+                    }
+                }
+            )
+            
+            # Add correlation ID to response headers
+            response.headers["X-Correlation-ID"] = correlation_id
+            return response
+            
+        except Exception as e:
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            logger.exception(
+                "Request failed",
+                extra={
+                    "context": {
+                        "method": request.method,
+                        "path": request.url.path,
+                        "duration_ms": round(duration_ms, 2),
+                        "error": str(e),
+                    }
+                }
+            )
+            raise
+```
+
+### Example Log Output
+
+**Production (JSON):**
+```json
+{"timestamp": "2024-01-15T10:30:00.123456+00:00", "level": "INFO", "service": "api", "logger": "app.middleware.logging", "message": "Request started", "correlation_id": "abc12345-6789-def0-1234-567890abcdef", "context": {"method": "POST", "path": "/v1/enrich", "client_ip": "172.18.0.1", "user_agent": "GeoTruth-Desktop/1.0"}, "source": {"file": "/app/app/middleware/logging.py", "line": 35, "function": "dispatch"}}
+{"timestamp": "2024-01-15T10:30:00.168456+00:00", "level": "INFO", "service": "api", "logger": "app.services.enrichment", "message": "Enrichment completed", "correlation_id": "abc12345-6789-def0-1234-567890abcdef", "context": {"lat": 36.1069, "lon": -112.1129, "pois_found": 3, "cache_hit": true}, "source": {"file": "/app/app/services/enrichment.py", "line": 89, "function": "enrich_point"}}
+{"timestamp": "2024-01-15T10:30:00.170456+00:00", "level": "INFO", "service": "api", "logger": "app.middleware.logging", "message": "Request completed", "correlation_id": "abc12345-6789-def0-1234-567890abcdef", "context": {"method": "POST", "path": "/v1/enrich", "status_code": 200, "duration_ms": 47.12}, "source": {"file": "/app/app/middleware/logging.py", "line": 52, "function": "dispatch"}}
+```
+
+**Development (Pretty):**
+```
+INFO     [abc12345] Request started - POST /v1/enrich
+INFO     [abc12345] Enrichment completed - 3 POIs found
+INFO     [abc12345] Request completed - 200 in 47.12ms
 ```
 
 ---
 
-## 🔌 API Endpoints
+## 📦 Requirements (requirements.txt)
 
-See [API Reference](../api/README.md) for complete documentation.
+```txt
+# =============================================================================
+# GeoTruth API Dependencies
+# Pinned to latest stable versions as of 2024-01
+# =============================================================================
 
-### Quick Reference
+# Web Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+starlette>=0.41.0
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/health` | GET | Health check |
-| `/v1/enrich` | POST | Enrich single GPS point |
-| `/v1/enrich_batch` | POST | Enrich multiple points |
-| `/v1/map_match` | POST | Match GPS to roads |
-| `/v1/narrate` | POST | Generate AI narration |
-| `/v1/pois` | GET | Query POIs |
+# Data Validation
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Database
+asyncpg>=0.30.0
+sqlalchemy>=2.0.36
+geoalchemy2>=0.15.0
+alembic>=1.14.0
+
+# Caching
+redis>=5.2.0
+hiredis>=3.0.0
+
+# HTTP Client
+httpx>=0.28.0
+
+# Geospatial
+shapely>=2.0.6
+pyproj>=3.7.0
+
+# AI
+google-generativeai>=0.8.0
+
+# Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Observability
+structlog>=24.4.0
+
+# Utilities
+python-multipart>=0.0.17
+python-dotenv>=1.0.1
+orjson>=3.10.0
+
+# Development (in requirements-dev.txt)
+# pytest>=8.3.0
+# pytest-asyncio>=0.24.0
+# pytest-cov>=6.0.0
+# httpx>=0.28.0
+# ruff>=0.8.0
+# mypy>=1.13.0
+```
 
 ---
 
-## 🗺️ Valhalla Setup
+## 🔒 Network Isolation
 
-### Building Tiles
+Services are isolated using Docker networks:
+
+| Network | Services | External Access |
+|---------|----------|-----------------|
+| `frontend` | api | Yes (port 8000) |
+| `backend` | geo-db, cache, map-matcher | **No** (internal only) |
+
+The `backend` network is marked as `internal: true`, meaning:
+- No direct access from host machine
+- No internet access from containers
+- Only accessible through the `api` service
+
+---
+
+## 🧪 Testing
 
 ```bash
-# Download OSM extract (example: North America)
-wget https://download.geofabrik.de/north-america-latest.osm.pbf
+# Run tests in Docker
+docker compose -f docker-compose.test.yml up --abort-on-container-exit
 
-# Build Valhalla tiles (takes 2-6 hours)
-docker run --rm -v $(pwd)/valhalla_tiles:/data/valhalla \
-    ghcr.io/gis-ops/docker-valhalla/valhalla:latest \
-    valhalla_build_tiles -c /data/valhalla/valhalla.json \
-    /data/valhalla/north-america-latest.osm.pbf
-```
+# Or run specific tests
+docker compose exec api pytest tests/ -v
 
-### Memory Optimization
-
-For limited RAM environments:
-
-```yaml
-# docker-compose.override.yml
-services:
-  map-matcher:
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-    environment:
-      - tile_extract: "/data/valhalla/tiles.tar"
-      - concurrency: 2
-```
-
----
-
-## 🔒 Security
-
-### Authentication
-
-All API endpoints (except health) require JWT authentication:
-
-```python
-# Example authenticated request
-import httpx
-
-async def call_api():
-    token = "your_jwt_token"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "http://localhost:8000/v1/enrich",
-            headers=headers,
-            json={"lat": 36.1069, "lon": -112.1129}
-        )
-        return response.json()
-```
-
-### Rate Limiting
-
-```python
-# Implemented via slowapi
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
-
-@app.get("/v1/enrich")
-@limiter.limit("100/minute")
-async def enrich(request: Request):
-    ...
+# With coverage
+docker compose exec api pytest tests/ --cov=app --cov-report=html
 ```
 
 ---
 
 ## 📈 Monitoring
 
-### Health Check
+### Log Aggregation
+
+All services output JSON logs to stdout, compatible with:
+- Docker logging drivers
+- ELK Stack
+- Grafana Loki
+- CloudWatch
+
+### Viewing Logs
 
 ```bash
-curl http://localhost:8000/v1/health
-```
+# All services
+docker compose logs -f
 
-Response:
-```json
-{
-  "status": "healthy",
-  "services": {
-    "database": "connected",
-    "redis": "connected",
-    "valhalla": "connected"
-  },
-  "version": "1.0.0"
-}
-```
+# Specific service
+docker compose logs -f api
 
-### Logging
+# With timestamps
+docker compose logs -f --timestamps
 
-Logs are structured JSON for easy parsing:
+# Last N lines
+docker compose logs --tail=100 api
 
-```json
-{
-  "timestamp": "2024-01-15T10:30:00Z",
-  "level": "INFO",
-  "message": "Enrichment completed",
-  "request_id": "abc-123",
-  "duration_ms": 45,
-  "pois_found": 3
-}
+# Filter by correlation ID (requires jq)
+docker compose logs api | grep "abc12345"
 ```
 
 ---
 
 ## 🚀 Production Deployment
 
-### Using docker-compose.prod.yml
-
-```yaml
-# docker-compose.prod.yml
-version: '3.8'
-
-services:
-  api:
-    image: your-registry/geotruth-api:latest
-    deploy:
-      replicas: 3
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-    environment:
-      - LOG_LEVEL=WARNING
-    # Remove volume mounts for immutable deployment
-    volumes: []
-```
+### Using Docker Swarm
 
 ```bash
-# Deploy to production
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Initialize swarm
+docker swarm init
+
+# Deploy stack
+docker stack deploy -c docker-compose.yml geotruth
+
+# Check services
+docker service ls
 ```
 
-### Nginx Reverse Proxy
+### Environment Variables
 
-```nginx
-upstream geotruth_api {
-    server api:8000;
-}
+```bash
+# Required
+POSTGRES_PASSWORD=<strong-password>
+GEMINI_API_KEY=<your-gemini-key>
+JWT_SECRET=<256-bit-secret>
 
-server {
-    listen 80;
-    server_name api.geotruth.example.com;
-
-    location / {
-        proxy_pass http://geotruth_api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
+# Optional
+POSTGRES_USER=geotruth
+POSTGRES_DB=geotruth
+LOG_LEVEL=INFO
 ```
 
 ---
@@ -576,6 +767,6 @@ server {
 ## 📚 Related Documentation
 
 - [Architecture Overview](../architecture/README.md)
-- [Truth Engine](../architecture/truth-engine.md)
+- [Logging Guide](../logging.md)
 - [API Reference](../api/README.md)
 - [Security Guidelines](../security/README.md)

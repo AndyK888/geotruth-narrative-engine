@@ -1,206 +1,262 @@
 # Architecture Overview
 
-This document describes the high-level architecture of the GeoTruth Narrative Engine, explaining how components interact to deliver fact-checked, AI-narrated travel stories.
+This document describes the high-level architecture of the GeoTruth Narrative Engine, emphasizing **zero local dependencies**, **service isolation**, and **structured logging**.
 
 ---
 
 ## 📐 System Design
 
-### Core Philosophy: "Verify First, Narrate Second"
+### Core Principles
 
-The GeoTruth architecture is built on a fundamental principle: **AI should never hallucinate geographic facts**. This is achieved through a three-layer verification system:
+1. **Zero Local Dependencies**
+   - Backend: 100% Docker containers
+   - Desktop: Self-contained app with bundled binaries
+   - Development: Docker-based, no local toolchain
 
-```mermaid
-graph TB
-    subgraph "Layer 1: Local Processing"
-        V[Video Input] --> FFM[FFmpeg Extraction]
-        G[GPS/GPX Input] --> GPP[GPS Parser]
-        FFM --> TS[Time Synchronizer]
-        GPP --> TS
-        TS --> LE[Local Events DB]
-    end
-    
-    subgraph "Layer 2: Cloud Verification"
-        LE --> API[API Server]
-        API --> MM[Map Matcher]
-        API --> PG[PostGIS]
-        MM --> TB[Truth Bundle]
-        PG --> TB
-    end
-    
-    subgraph "Layer 3: Constrained AI"
-        TB --> GEM[Gemini AI]
-        TR[Transcript] --> GEM
-        GEM --> NAR[Verified Narration]
-    end
-```
+2. **Service Isolation**
+   - Each service in its own container
+   - Internal network for sensitive services
+   - No direct database access from outside
+
+3. **Structured Logging**
+   - JSON format for machine parsing
+   - Correlation IDs across all services
+   - Unified log format everywhere
 
 ---
 
-## 🏗️ Component Architecture
-
-### Desktop Application (Tauri v2)
-
-The desktop app is the primary user interface and handles all privacy-sensitive operations locally.
+## 🏗️ Deployment Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Tauri Desktop App                     │
-├─────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────────────────┐  │
-│  │   React Frontend │  │      Rust Core Engine       │  │
-│  │                   │  │                             │  │
-│  │  • Truth Timeline │  │  • Video Processing         │  │
-│  │  • Map View       │  │  • GPS Parsing              │  │
-│  │  • Event Editor   │  │  • Time Synchronization     │  │
-│  │  • Export Panel   │  │  • DuckDB Management        │  │
-│  │                   │  │  • Sidecar Orchestration    │  │
-│  └─────────────────┘  └─────────────────────────────┘  │
-├─────────────────────────────────────────────────────────┤
-│                     Sidecar Binaries                     │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌───────────┐  │
-│  │ FFmpeg  │  │ FFprobe │  │ Whisper │  │ Tesseract │  │
-│  └─────────┘  └─────────┘  └─────────┘  └───────────┘  │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Backend Services (Docker Compose)
-
-The cloud infrastructure provides geospatial intelligence without ever receiving video data.
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                 Docker Compose Stack                     │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌─────────────┐    ┌─────────────┐    ┌────────────┐  │
-│  │  API Server │────│    Redis    │────│  PostGIS   │  │
-│  │  (FastAPI)  │    │   (Cache)   │    │ (Geo Data) │  │
-│  └──────┬──────┘    └─────────────┘    └────────────┘  │
-│         │                                                │
-│         │           ┌─────────────────────────────────┐ │
-│         └──────────▶│       Valhalla / OSRM           │ │
-│                     │      (Map Matching)              │ │
-│                     └─────────────────────────────────┘ │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              USER'S MACHINE                                  │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                    GeoTruth Desktop App (Bundled)                       │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────────┐   │ │
+│  │  │ React UI     │  │ Rust Core    │  │ Bundled Binaries           │   │ │
+│  │  │ (Bundled)    │  │ (Compiled)   │  │ FFmpeg, Whisper, Tesseract │   │ │
+│  │  └──────────────┘  └──────────────┘  └────────────────────────────┘   │ │
+│  └────────────────────────────────┬───────────────────────────────────────┘ │
+│                                   │                                          │
+│                                   │ HTTPS (Anonymized GPS only)             │
+│                                   ▼                                          │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                    Docker Compose (Backend)                             │ │
+│  │                                                                          │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐   │ │
+│  │  │                    Frontend Network                              │   │ │
+│  │  │  ┌──────────────────────────────────────────────────────────┐   │   │ │
+│  │  │  │  API Server (FastAPI) ─────────────────────────────────┐ │   │   │ │
+│  │  │  │  Port: 8000                                            │ │   │   │ │
+│  │  │  └────────────────────────────────────────────────────────┘ │   │   │ │
+│  │  └──────────────────────────────────────┬──────────────────────┘   │   │ │
+│  │                                         │                          │   │ │
+│  │  ┌──────────────────────────────────────┼──────────────────────┐   │   │ │
+│  │  │          Backend Network (INTERNAL - No External Access)    │   │   │ │
+│  │  │                                      │                      │   │   │ │
+│  │  │  ┌──────────────┐  ┌────────────────┼─┐  ┌──────────────┐  │   │   │ │
+│  │  │  │  PostGIS     │  │  Redis         │ │  │  Valhalla    │  │   │   │ │
+│  │  │  │  Database    │◄─│  Cache         │◄├──│  Routing     │  │   │   │ │
+│  │  │  │  Port: 5432  │  │  Port: 6379    │ │  │  Port: 8002  │  │   │   │ │
+│  │  │  └──────────────┘  └────────────────┘ │  └──────────────┘  │   │   │ │
+│  │  │         ▲                   ▲         │         ▲          │   │   │ │
+│  │  │         │                   │         └─────────┘          │   │   │ │
+│  │  │         └───────────────────┴──────────────────────────────┼───┘   │ │
+│  │  │                    (Only API can access)                   │       │ │
+│  │  └────────────────────────────────────────────────────────────┘       │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 📊 Data Flow
 
-### 1. Ingest Phase (Local)
+### 1. Ingest Phase (Local - Desktop)
 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant R as Rust Core
-    participant FF as FFmpeg
-    participant GP as GPS Parser
-    participant DB as DuckDB
+    participant App as GeoTruth App
+    participant FFmpeg as FFmpeg (Bundled)
+    participant Whisper as Whisper (Bundled)
+    participant DB as DuckDB (Embedded)
     
-    U->>R: Drop video + GPX files
-    R->>FF: Extract metadata, frames
-    FF-->>R: Duration, FPS, thumbnails
-    R->>GP: Parse GPS track
-    GP-->>R: Lat/Lon/Time points
-    R->>R: Calculate time offset (OCR/audio)
-    R->>DB: Store synced events
+    U->>App: Drop video + GPX files
+    App->>FFmpeg: Extract metadata
+    FFmpeg-->>App: Duration, FPS, codec
+    App->>FFmpeg: Extract frames
+    FFmpeg-->>App: Thumbnail strip
+    App->>Whisper: Transcribe audio
+    Whisper-->>App: Transcript with timestamps
+    App->>DB: Store project data
+    
+    Note over App: All local - no network
 ```
 
-### 2. Enrichment Phase (Cloud)
+### 2. Enrichment Phase (Cloud - Docker)
 
 ```mermaid
 sequenceDiagram
-    participant R as Rust Core
-    participant API as FastAPI
-    participant MM as Map Matcher
-    participant PG as PostGIS
-    participant RD as Redis
+    participant App as Desktop App
+    participant API as API (Container)
+    participant Cache as Redis (Container)
+    participant Valhalla as Valhalla (Container)
+    participant PG as PostGIS (Container)
     
-    R->>API: POST /v1/enrich_batch
-    API->>RD: Check cache
+    App->>API: POST /v1/enrich_batch (GPS points only)
+    Note over App,API: Correlation-ID: abc123
+    
+    API->>Cache: Check cache
     alt Cache Hit
-        RD-->>API: Cached POIs
+        Cache-->>API: Cached enrichment
     else Cache Miss
-        API->>MM: Snap GPS to roads
-        MM-->>API: Matched route
+        API->>Valhalla: Map match GPS
+        Valhalla-->>API: Snapped route
         API->>PG: Query nearby POIs
         PG-->>API: Verified locations
-        API->>RD: Update cache
+        API->>Cache: Store in cache
     end
-    API-->>R: Truth Bundle JSON
+    
+    API-->>App: Truth Bundle JSON
 ```
 
 ### 3. Narration Phase (AI)
 
 ```mermaid
 sequenceDiagram
-    participant R as Rust Core
-    participant W as Whisper
-    participant API as FastAPI
-    participant GEM as Gemini AI
+    participant App as Desktop App
+    participant API as API Server
+    participant Gemini as Google Gemini
     
-    R->>W: Extract audio
-    W-->>R: Transcript
-    R->>API: POST /v1/narrate
+    App->>API: POST /v1/narrate
     Note over API: Bundle: Truth + Transcript
-    API->>GEM: Constrained prompt
-    GEM-->>API: Verified narration
-    API-->>R: Chapters + Script
+    API->>Gemini: Constrained prompt
+    Note over Gemini: "Only mention verified POIs"
+    Gemini-->>API: Fact-checked narration
+    API-->>App: Chapters + Script
 ```
 
 ---
 
 ## 🔒 Security Architecture
 
-### API Key Management
+### Network Isolation
 
 ```
-┌─────────────────────────────────────────────┐
-│            Desktop Application               │
-│  ┌───────────────────────────────────────┐  │
-│  │          OS Native Keychain            │  │
-│  │  • JWT Auth Token                      │  │
-│  │  • User's Gemini API Key (BYOK)        │  │
-│  └───────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────┐  │
-│  │        tauri-plugin-store              │  │
-│  │  • Theme preferences                   │  │
-│  │  • Default export paths                │  │
-│  │  • UI settings                         │  │
-│  └───────────────────────────────────────┘  │
-└─────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────┐
-│             Backend Services                 │
-│  ┌───────────────────────────────────────┐  │
-│  │    Environment Variables (.env)        │  │
-│  │  • DATABASE_URL                        │  │
-│  │  • REDIS_URL                           │  │
-│  │  • GEMINI_API_KEY                      │  │
-│  │  • JWT_SECRET                          │  │
-│  └───────────────────────────────────────┘  │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     Docker Networks                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Frontend Network (frontend)                                 │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │                                                         │ │
+│  │  ┌─────────────┐                                       │ │
+│  │  │  API Server │ ◄──── External Access (Port 8000)     │ │
+│  │  └──────┬──────┘                                       │ │
+│  │         │                                               │ │
+│  └─────────┼───────────────────────────────────────────────┘ │
+│            │                                                 │
+│  Backend Network (backend)  [internal: true]                │
+│  ┌─────────┼───────────────────────────────────────────────┐ │
+│  │         ▼                                               │ │
+│  │  ┌────────────┐  ┌──────────┐  ┌────────────────────┐  │ │
+│  │  │  PostGIS   │  │  Redis   │  │  Valhalla          │  │ │
+│  │  │            │  │          │  │                    │  │ │
+│  │  └────────────┘  └──────────┘  └────────────────────┘  │ │
+│  │                                                         │ │
+│  │  ⛔ No external access - only API can reach these      │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Privacy Boundaries
+### Secret Management
 
-| Data Type | Processed Where | Sent to Cloud? |
-|-----------|-----------------|----------------|
-| Raw Video | Desktop (local) | ❌ Never |
-| Audio | Desktop (local) | ❌ Never |
-| Thumbnails | Desktop (local) | ❌ Never |
-| GPS Coordinates | Desktop → Cloud | ✅ Anonymized |
-| Transcript | Desktop (local) | ✅ For narration |
-| Generated Script | Cloud → Desktop | ✅ Returned |
+| Location | Storage Method |
+|----------|---------------|
+| Desktop App | OS Keychain (macOS Keychain, Windows Credential Manager) |
+| Backend | Docker Secrets / Environment Variables |
+
+---
+
+## 📊 Logging Architecture
+
+All components emit structured JSON logs with correlation IDs:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Log Flow                                │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Desktop App                                                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  Rust Backend → JSON logs → File (~/.../logs/)          ││
+│  │  React Frontend → Console logs → Rust (errors/warnings) ││
+│  └─────────────────────────────────────────────────────────┘│
+│                                                              │
+│  Backend Services                                            │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  API → JSON logs → stdout → Docker logging driver       ││
+│  │  PostGIS → stdout → Docker logging driver               ││
+│  │  Redis → stdout → Docker logging driver                 ││
+│  │  Valhalla → stdout → Docker logging driver              ││
+│  └─────────────────────────────────────────────────────────┘│
+│                            │                                 │
+│                            ▼                                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  Log Aggregation (Optional)                              ││
+│  │  ELK Stack / Grafana Loki / CloudWatch                   ││
+│  └─────────────────────────────────────────────────────────┘│
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Correlation ID Flow
+
+```
+Request Flow:
+Desktop App ─────────────────────────────────────────────────────────►
+    │                                                                 
+    │ X-Correlation-ID: abc-123                                      
+    ▼                                                                 
+API Server ──────────────────────────────────────────────────────────►
+    │ Log: {"correlation_id": "abc-123", "message": "Enriching..."}  
+    │                                                                 
+    │ Internal calls include correlation_id                          
+    ▼                                                                 
+PostGIS ─────────────────────────────────────────────────────────────►
+    │ Log: {"correlation_id": "abc-123", "query_ms": 15}             
+    ▼                                                                 
+Response ◄───────────────────────────────────────────────────────────
+    X-Correlation-ID: abc-123
+```
+
+---
+
+## 🧰 Technology Matrix
+
+### Latest Versions (Pinned)
+
+| Component | Technology | Version | Container |
+|-----------|------------|---------|-----------|
+| **API Runtime** | Python | 3.12 | ✅ |
+| **API Framework** | FastAPI | 0.115+ | ✅ |
+| **Database** | PostgreSQL + PostGIS | 17 + 3.5 | ✅ |
+| **Routing** | Valhalla | 3.5 | ✅ |
+| **Cache** | Redis | 7.4 | ✅ |
+| **Desktop Runtime** | Rust | 1.83 | Bundled |
+| **Desktop UI** | React | 19 | Bundled |
+| **Video Processing** | FFmpeg | 7.1 | Bundled |
+| **Transcription** | Whisper.cpp | 1.7 | Bundled |
+| **Local DB** | DuckDB | 1.1 | Compiled |
 
 ---
 
 ## 📁 Data Models
 
-### Event (Local - DuckDB)
+### Event (Desktop - DuckDB)
 
 ```sql
 CREATE TABLE events (
@@ -211,14 +267,13 @@ CREATE TABLE events (
     end_time TIMESTAMP NOT NULL,
     geo_lat DOUBLE,
     geo_lon DOUBLE,
-    event_type TEXT,           -- 'stop', 'poi', 'landmark', 'manual'
+    event_type TEXT,
     confidence FLOAT,
-    truth_json JSON,           -- Enriched data from cloud
+    truth_json JSON,
     transcript TEXT,
     narration TEXT,
     user_verified BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -227,75 +282,33 @@ CREATE TABLE events (
 ```json
 {
   "event_id": "uuid",
+  "correlation_id": "req-abc123",
   "matched_location": {
     "lat": 36.1069,
     "lon": -112.1129,
-    "road_name": "AZ-64",
-    "road_type": "highway"
+    "road_name": "AZ-64"
   },
   "visible_pois": [
     {
       "name": "Grand Canyon South Rim",
       "type": "natural_landmark",
-      "distance_m": 150,
-      "in_field_of_view": true,
       "confidence": 0.95
     }
   ],
-  "context": {
-    "elevation_m": 2134,
-    "timezone": "America/Phoenix",
-    "country": "USA",
-    "region": "Arizona"
+  "processing": {
+    "map_match_ms": 45,
+    "poi_query_ms": 12,
+    "cache_hit": false
   }
 }
 ```
 
 ---
 
-## 🔌 Integration Points
-
-### External Services
-
-| Service | Purpose | Integration |
-|---------|---------|-------------|
-| **Google Gemini** | AI narration | REST API |
-| **OpenStreetMap** | Base map data | PostGIS import |
-| **Valhalla** | Route matching | Docker container |
-| **Overpass API** | POI data | Batch import |
-
-### Desktop Sidecars
-
-| Binary | Purpose | Invocation |
-|--------|---------|------------|
-| **FFmpeg** | Video extraction | `tauri::api::process::Command` |
-| **FFprobe** | Metadata reading | `tauri::api::process::Command` |
-| **Whisper** | Transcription | `tauri::api::process::Command` |
-| **Tesseract** | OCR (time sync) | Rust bindings |
-
----
-
-## 📈 Scalability Considerations
-
-### Desktop Performance
-
-- **DuckDB** handles millions of GPS points efficiently
-- **Chunked processing** for large video files
-- **Background threads** for sidecar operations
-- **Incremental saves** to prevent data loss
-
-### Backend Scalability
-
-- **Redis caching** reduces PostGIS load
-- **Batch API endpoints** minimize round trips
-- **Valhalla tiling** for regional coverage
-- **Horizontal scaling** via Docker Swarm/K8s
-
----
-
 ## 📚 Related Documentation
 
-- [Desktop App Development](../desktop/README.md)
 - [Backend Services](../backend/README.md)
+- [Desktop Application](../desktop/README.md)
+- [Logging Guide](../logging.md)
 - [API Reference](../api/README.md)
 - [Security Guidelines](../security/README.md)

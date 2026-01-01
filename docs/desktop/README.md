@@ -1,43 +1,46 @@
 # Desktop Application
 
-The GeoTruth desktop application is built with **Tauri v2**, combining a Rust backend for performance-critical operations with a React frontend for the user interface. This document covers development, architecture, and deployment.
+The GeoTruth desktop application is a **self-contained bundle** with zero local dependencies. All binaries (FFmpeg, Whisper, etc.) are bundled inside the app.
 
 ---
 
-## 🏗️ Architecture
+## 🎯 Zero Local Dependencies
+
+When users download GeoTruth, they get everything they need:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Tauri Desktop App                         │
-├─────────────────────────────────────────────────────────────┤
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                   React Frontend                       │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐  │  │
-│  │  │  Timeline   │ │   Map View  │ │  Export Panel   │  │  │
-│  │  │  Component  │ │  Component  │ │   Component     │  │  │
-│  │  └─────────────┘ └─────────────┘ └─────────────────┘  │  │
-│  │                         │                              │  │
-│  │              TanStack Query + Tauri IPC               │  │
-│  └─────────────────────────┬─────────────────────────────┘  │
-│                            │                                 │
-│  ┌─────────────────────────▼─────────────────────────────┐  │
-│  │                    Rust Backend                        │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐  │  │
-│  │  │   Project   │ │    Sync     │ │    Sidecar      │  │  │
-│  │  │   Manager   │ │   Engine    │ │  Orchestrator   │  │  │
-│  │  └─────────────┘ └─────────────┘ └─────────────────┘  │  │
-│  │                         │                              │  │
-│  │                      DuckDB                            │  │
-│  └─────────────────────────┬─────────────────────────────┘  │
-│                            │                                 │
-│  ┌─────────────────────────▼─────────────────────────────┐  │
-│  │                   Sidecar Binaries                     │  │
-│  │  ┌────────┐  ┌────────┐  ┌─────────┐  ┌───────────┐   │  │
-│  │  │ FFmpeg │  │FFprobe │  │ Whisper │  │ Tesseract │   │  │
-│  │  └────────┘  └────────┘  └─────────┘  └───────────┘   │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                   GeoTruth.app (Self-Contained)                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                    Tauri Runtime                            │ │
+│  │  ┌──────────────────────┐  ┌────────────────────────────┐  │ │
+│  │  │   React Frontend     │  │      Rust Backend          │  │ │
+│  │  │   (Bundled Vite)     │  │   (Native Binary)          │  │ │
+│  │  └──────────────────────┘  └────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                   Bundled Binaries                          │ │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐   │ │
+│  │  │  FFmpeg  │ │ FFprobe  │ │ Whisper  │ │ Tesseract    │   │ │
+│  │  │   7.x    │ │   7.x    │ │  cpp     │ │   5.x        │   │ │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘   │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                   Embedded Database                         │ │
+│  │  ┌─────────────────────────────────────────────────────┐   │ │
+│  │  │                     DuckDB                           │   │ │
+│  │  │              (Compiled into Rust)                    │   │ │
+│  │  └─────────────────────────────────────────────────────┘   │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+**Users install the app. That's it. No additional software required.**
 
 ---
 
@@ -45,125 +48,188 @@ The GeoTruth desktop application is built with **Tauri v2**, combining a Rust ba
 
 ```
 /desktop
-├── /src                        # React Frontend
-│   ├── /components
-│   │   ├── /timeline           # Truth Timeline components
-│   │   ├── /map                # Map visualization
-│   │   ├── /editor             # Event editor
-│   │   └── /export             # Export options
-│   ├── /hooks
-│   │   ├── useProject.ts       # Project state management
-│   │   ├── useEvents.ts        # Event queries
-│   │   └── useTauri.ts         # Tauri IPC wrapper
-│   ├── /stores
-│   │   └── appStore.ts         # Zustand global state
-│   ├── /lib
-│   │   ├── tauri.ts            # Tauri command bindings
-│   │   └── utils.ts            # Utility functions
-│   ├── /pages
-│   │   ├── Home.tsx
-│   │   ├── Project.tsx
-│   │   └── Settings.tsx
+├── /src                          # React Frontend
+│   ├── /components               # UI components
+│   ├── /hooks                    # React hooks
+│   ├── /stores                   # Zustand state
+│   ├── /lib                      # Utilities
 │   ├── App.tsx
 │   ├── main.tsx
 │   └── index.css
-├── /src-tauri                  # Rust Backend
+├── /src-tauri                    # Rust Backend
 │   ├── /src
-│   │   ├── main.rs             # Application entry
-│   │   ├── lib.rs              # Library exports
-│   │   ├── /commands           # Tauri commands
-│   │   │   ├── mod.rs
-│   │   │   ├── project.rs      # Project management
-│   │   │   ├── ingest.rs       # Media ingestion
-│   │   │   ├── sync.rs         # Time synchronization
-│   │   │   └── export.rs       # Export functions
-│   │   ├── /services
-│   │   │   ├── mod.rs
-│   │   │   ├── database.rs     # DuckDB operations
-│   │   │   ├── gps.rs          # GPS parsing
-│   │   │   ├── sidecar.rs      # FFmpeg/Whisper runner
-│   │   │   └── api.rs          # Cloud API client
-│   │   ├── /models
-│   │   │   ├── mod.rs
-│   │   │   ├── project.rs
-│   │   │   ├── event.rs
-│   │   │   └── truth.rs
-│   │   └── /utils
-│   │       ├── mod.rs
-│   │       └── time.rs
+│   │   ├── main.rs               # Entry point
+│   │   ├── lib.rs                # Library
+│   │   ├── logging.rs            # Structured logging
+│   │   ├── /commands             # Tauri commands
+│   │   ├── /services             # Business logic
+│   │   ├── /models               # Data models
+│   │   └── /utils                # Utilities
 │   ├── Cargo.toml
 │   ├── tauri.conf.json
 │   └── build.rs
-├── /binaries                   # Bundled sidecars
-│   ├── ffmpeg-x86_64-apple-darwin
-│   ├── ffprobe-x86_64-apple-darwin
-│   ├── whisper-x86_64-apple-darwin
-│   └── ...
+├── /binaries                     # Bundled sidecars
+│   ├── /darwin-aarch64           # macOS ARM
+│   ├── /darwin-x86_64            # macOS Intel
+│   ├── /windows-x86_64           # Windows
+│   └── /linux-x86_64             # Linux
+├── /scripts
+│   └── download-binaries.sh      # Binary download script
 ├── package.json
 ├── vite.config.ts
-└── tsconfig.json
+├── Dockerfile.dev                # Dev environment
+└── docker-compose.dev.yml        # Dev orchestration
 ```
 
 ---
 
-## 🚀 Development Setup
+## 🐳 Development (Docker-Based)
 
-### Prerequisites
+No local Rust or Node.js installation required. Everything runs in Docker.
 
-- **Node.js** 18.x+
-- **Rust** 1.70+ with `cargo`
-- **FFmpeg** (for development)
-- **Tauri CLI**: `cargo install tauri-cli`
-
-### Installation
+### Start Development Environment
 
 ```bash
-# Navigate to desktop directory
 cd desktop
 
-# Install JavaScript dependencies
-npm install
+# Start dev environment (first run downloads dependencies)
+docker compose -f docker-compose.dev.yml up
 
-# Install Rust dependencies (automatic via Cargo)
-cd src-tauri && cargo build
-
-# Return to desktop root
-cd ..
+# Access development server at http://localhost:5173
+# Changes hot-reload automatically
 ```
 
-### Running Development
+### docker-compose.dev.yml
 
-```bash
-# Start Tauri dev server (hot reload for both frontend and Rust)
-npm run tauri dev
+```yaml
+version: '3.9'
 
-# Or run commands separately:
-# Terminal 1: Frontend dev server
-npm run dev
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      # Source code for hot reload
+      - ./src:/app/src:cached
+      - ./src-tauri/src:/app/src-tauri/src:cached
+      # Persist build artifacts
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/src-tauri/target
+      - node-modules:/app/node_modules
+    ports:
+      - "5173:5173"  # Vite dev server
+    environment:
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+    tty: true
+    stdin_open: true
 
-# Terminal 2: Rust backend
-cd src-tauri && cargo tauri dev
+volumes:
+  cargo-cache:
+  target-cache:
+  node-modules:
 ```
 
-### Building for Production
+### Dockerfile.dev
 
-```bash
-# Build optimized bundle
-npm run tauri build
+```dockerfile
+FROM rust:1.83-slim
 
-# Output locations:
-# macOS: target/release/bundle/dmg/
-# Windows: target/release/bundle/msi/
-# Linux: target/release/bundle/appimage/
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Node.js
+    curl \
+    # Tauri dependencies
+    libwebkit2gtk-4.1-dev \
+    libgtk-3-dev \
+    librsvg2-dev \
+    libayatana-appindicator3-dev \
+    # Build tools
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    # FFmpeg for testing
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 22 LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g pnpm
+
+# Install Tauri CLI
+RUN cargo install tauri-cli
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install
+
+# Copy Rust files
+COPY src-tauri/Cargo.toml src-tauri/Cargo.lock ./src-tauri/
+RUN cd src-tauri && cargo fetch
+
+# Copy source
+COPY . .
+
+# Development command
+CMD ["pnpm", "tauri", "dev"]
 ```
 
 ---
 
-## ⚙️ Tauri Configuration
+## 📦 Bundled Binaries
 
-### tauri.conf.json
+All processing binaries are bundled with the app and executed as sidecars.
+
+### Binary Versions (Latest)
+
+| Binary | Version | Purpose |
+|--------|---------|---------|
+| **FFmpeg** | 7.1 | Video processing |
+| **FFprobe** | 7.1 | Metadata extraction |
+| **Whisper.cpp** | 1.7.2 | Audio transcription |
+| **Tesseract** | 5.4 | OCR for timestamps |
+
+### Download Script
+
+```bash
+#!/bin/bash
+# scripts/download-binaries.sh
+
+set -e
+
+BINARIES_DIR="binaries"
+FFMPEG_VERSION="7.1"
+WHISPER_VERSION="1.7.2"
+
+# Detect platform
+case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64)  PLATFORM="darwin-aarch64" ;;
+    Darwin-x86_64) PLATFORM="darwin-x86_64" ;;
+    Linux-x86_64)  PLATFORM="linux-x86_64" ;;
+    MINGW*|MSYS*)  PLATFORM="windows-x86_64" ;;
+    *) echo "Unsupported platform"; exit 1 ;;
+esac
+
+mkdir -p "$BINARIES_DIR/$PLATFORM"
+
+echo "Downloading FFmpeg $FFMPEG_VERSION for $PLATFORM..."
+# Platform-specific download URLs
+# ... download logic
+
+echo "Downloading Whisper.cpp $WHISPER_VERSION for $PLATFORM..."
+# ... download logic
+
+echo "All binaries downloaded to $BINARIES_DIR/$PLATFORM"
+```
+
+### Tauri Configuration
 
 ```json
+// tauri.conf.json
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "GeoTruth",
@@ -172,551 +238,421 @@ npm run tauri build
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
   },
   "app": {
     "windows": [
       {
         "title": "GeoTruth Narrative Engine",
         "width": 1400,
-        "height": 900,
-        "minWidth": 1000,
-        "minHeight": 700,
-        "resizable": true,
-        "fullscreen": false
+        "height": 900
       }
-    ],
-    "security": {
-      "csp": "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'"
-    }
+    ]
   },
   "bundle": {
     "active": true,
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
+    "icon": ["icons/icon.icns", "icons/icon.ico", "icons/icon.png"],
     "externalBin": [
       "binaries/ffmpeg",
       "binaries/ffprobe",
-      "binaries/whisper"
+      "binaries/whisper",
+      "binaries/tesseract"
     ],
-    "resources": [
-      "resources/*"
-    ]
-  },
-  "plugins": {
-    "store": {
-      "path": ".geotruth-settings.json"
-    }
+    "resources": ["resources/*"]
   }
 }
 ```
 
 ---
 
-## 🦀 Rust Backend
+## 📊 Structured Logging
 
-### Tauri Commands
+The desktop app uses comprehensive structured logging for debugging.
 
-Commands are the bridge between frontend and backend:
-
-```rust
-// src-tauri/src/commands/project.rs
-
-use tauri::State;
-use crate::services::database::Database;
-use crate::models::project::Project;
-
-#[tauri::command]
-pub async fn create_project(
-    db: State<'_, Database>,
-    name: String,
-    path: String,
-) -> Result<Project, String> {
-    let project = Project::new(name, path);
-    db.insert_project(&project)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(project)
-}
-
-#[tauri::command]
-pub async fn get_project(
-    db: State<'_, Database>,
-    id: String,
-) -> Result<Project, String> {
-    db.get_project(&id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn list_projects(
-    db: State<'_, Database>,
-) -> Result<Vec<Project>, String> {
-    db.list_projects()
-        .await
-        .map_err(|e| e.to_string())
-}
-```
-
-### Register Commands
+### Rust Logging Configuration
 
 ```rust
-// src-tauri/src/main.rs
+// src-tauri/src/logging.rs
 
-mod commands;
-mod services;
-mod models;
-
-use commands::{project, ingest, sync, export};
-use services::database::Database;
-
-fn main() {
-    tauri::Builder::default()
-        .setup(|app| {
-            // Initialize database
-            let db = Database::new(app.path().app_data_dir().unwrap())?;
-            app.manage(db);
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            // Project commands
-            project::create_project,
-            project::get_project,
-            project::list_projects,
-            project::delete_project,
-            
-            // Ingest commands
-            ingest::import_video,
-            ingest::import_gps,
-            ingest::analyze_media,
-            
-            // Sync commands
-            sync::calculate_offset,
-            sync::sync_timeline,
-            
-            // Export commands
-            export::export_chapters,
-            export::export_script,
-            export::export_subtitles,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
-```
-
-### DuckDB Integration
-
-```rust
-// src-tauri/src/services/database.rs
-
-use duckdb::{Connection, Result as DuckResult};
+use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use tracing::{Level, Subscriber};
+use tracing_subscriber::{
+    fmt::{self, format::FmtSpan},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter,
+};
 
-pub struct Database {
-    conn: Mutex<Connection>,
+#[derive(Serialize)]
+struct LogEntry {
+    timestamp: String,
+    level: String,
+    target: String,
+    message: String,
+    span: Option<String>,
+    correlation_id: Option<String>,
+    context: serde_json::Value,
 }
 
-impl Database {
-    pub fn new(data_dir: PathBuf) -> DuckResult<Self> {
-        let db_path = data_dir.join("geotruth.duckdb");
-        let conn = Connection::open(db_path)?;
-        
-        // Initialize schema
-        conn.execute_batch(include_str!("../../migrations/001_init.sql"))?;
-        
-        Ok(Self {
-            conn: Mutex::new(conn),
-        })
+pub struct LogConfig {
+    pub log_dir: PathBuf,
+    pub log_level: Level,
+    pub json_output: bool,
+    pub max_file_size_mb: u64,
+    pub max_files: u32,
+}
+
+impl Default for LogConfig {
+    fn default() -> Self {
+        Self {
+            log_dir: dirs::data_local_dir()
+                .unwrap_or_default()
+                .join("GeoTruth")
+                .join("logs"),
+            log_level: Level::INFO,
+            json_output: true,
+            max_file_size_mb: 50,
+            max_files: 5,
+        }
+    }
+}
+
+pub fn init_logging(config: LogConfig) -> Result<(), Box<dyn std::error::Error>> {
+    // Ensure log directory exists
+    fs::create_dir_all(&config.log_dir)?;
+    
+    let log_file = config.log_dir.join("geotruth.log");
+    
+    // File appender with rotation
+    let file_appender = tracing_appender::rolling::Builder::new()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("geotruth")
+        .filename_suffix("log")
+        .max_log_files(config.max_files as usize)
+        .build(&config.log_dir)?;
+    
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    
+    // Build subscriber
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(config.log_level.to_string()));
+    
+    if config.json_output {
+        // JSON format for production
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                fmt::layer()
+                    .json()
+                    .with_writer(non_blocking)
+                    .with_span_events(FmtSpan::CLOSE)
+                    .with_current_span(true)
+                    .with_thread_ids(true)
+                    .with_file(true)
+                    .with_line_number(true)
+            )
+            .with(
+                fmt::layer()
+                    .pretty()
+                    .with_writer(std::io::stderr)
+            )
+            .init();
+    } else {
+        // Pretty format for development
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                fmt::layer()
+                    .pretty()
+                    .with_writer(std::io::stderr)
+                    .with_span_events(FmtSpan::CLOSE)
+            )
+            .init();
     }
     
-    pub async fn insert_event(&self, event: &Event) -> DuckResult<()> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute(
-            "INSERT INTO events (id, project_id, video_path, start_time, end_time, geo_lat, geo_lon)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-                &event.id,
-                &event.project_id,
-                &event.video_path,
-                &event.start_time.to_string(),
-                &event.end_time.to_string(),
-                &event.geo_lat.to_string(),
-                &event.geo_lon.to_string(),
-            ],
-        )?;
-        Ok(())
-    }
-}
-```
-
-### Sidecar Execution
-
-```rust
-// src-tauri/src/services/sidecar.rs
-
-use tauri::api::process::{Command, CommandEvent};
-use tokio::sync::mpsc;
-
-pub struct SidecarRunner;
-
-impl SidecarRunner {
-    /// Extract video metadata using FFprobe
-    pub async fn get_video_info(video_path: &str) -> Result<VideoInfo, String> {
-        let (mut rx, _child) = Command::new_sidecar("ffprobe")
-            .map_err(|e| e.to_string())?
-            .args([
-                "-v", "quiet",
-                "-print_format", "json",
-                "-show_format",
-                "-show_streams",
-                video_path,
-            ])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-        
-        let mut output = String::new();
-        while let Some(event) = rx.recv().await {
-            if let CommandEvent::Stdout(line) = event {
-                output.push_str(&line);
-            }
-        }
-        
-        serde_json::from_str(&output).map_err(|e| e.to_string())
-    }
-    
-    /// Transcribe audio using Whisper
-    pub async fn transcribe(
-        audio_path: &str,
-        on_progress: impl Fn(f32),
-    ) -> Result<Transcript, String> {
-        let (mut rx, _child) = Command::new_sidecar("whisper")
-            .map_err(|e| e.to_string())?
-            .args([
-                "--model", "base",
-                "--output-format", "json",
-                "--language", "auto",
-                audio_path,
-            ])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-        
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(line) => {
-                    // Parse progress from output
-                    if let Some(progress) = parse_whisper_progress(&line) {
-                        on_progress(progress);
-                    }
-                }
-                CommandEvent::Terminated { code, .. } => {
-                    if code != Some(0) {
-                        return Err("Whisper failed".to_string());
-                    }
-                }
-                _ => {}
-            }
-        }
-        
-        // Load output file
-        let output_path = format!("{}.json", audio_path);
-        let content = std::fs::read_to_string(&output_path)
-            .map_err(|e| e.to_string())?;
-        serde_json::from_str(&content).map_err(|e| e.to_string())
-    }
-}
-```
-
----
-
-## ⚛️ React Frontend
-
-### Tauri IPC from React
-
-```typescript
-// src/lib/tauri.ts
-
-import { invoke } from '@tauri-apps/api/core';
-
-export interface Project {
-  id: string;
-  name: string;
-  path: string;
-  createdAt: string;
-}
-
-export interface Event {
-  id: string;
-  projectId: string;
-  videoPath: string;
-  startTime: string;
-  endTime: string;
-  geoLat: number;
-  geoLon: number;
-  truthJson?: TruthBundle;
-}
-
-// Project commands
-export const createProject = (name: string, path: string) =>
-  invoke<Project>('create_project', { name, path });
-
-export const getProject = (id: string) =>
-  invoke<Project>('get_project', { id });
-
-export const listProjects = () =>
-  invoke<Project[]>('list_projects');
-
-// Ingest commands
-export const importVideo = (projectId: string, videoPath: string) =>
-  invoke<void>('import_video', { projectId, videoPath });
-
-export const importGps = (projectId: string, gpsPath: string) =>
-  invoke<void>('import_gps', { projectId, gpsPath });
-
-// Sync commands
-export const calculateOffset = (projectId: string) =>
-  invoke<number>('calculate_offset', { projectId });
-
-// Export commands
-export const exportChapters = (projectId: string, outputPath: string) =>
-  invoke<void>('export_chapters', { projectId, outputPath });
-```
-
-### TanStack Query Integration
-
-```typescript
-// src/hooks/useProject.ts
-
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as tauri from '../lib/tauri';
-
-export function useProjects() {
-  return useQuery({
-    queryKey: ['projects'],
-    queryFn: tauri.listProjects,
-  });
-}
-
-export function useProject(id: string) {
-  return useQuery({
-    queryKey: ['project', id],
-    queryFn: () => tauri.getProject(id),
-    enabled: !!id,
-  });
-}
-
-export function useCreateProject() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: ({ name, path }: { name: string; path: string }) =>
-      tauri.createProject(name, path),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-    },
-  });
-}
-
-export function useImportVideo(projectId: string) {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (videoPath: string) =>
-      tauri.importVideo(projectId, videoPath),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['events', projectId] });
-    },
-  });
-}
-```
-
-### Event Listening
-
-```typescript
-// src/hooks/useProgress.ts
-
-import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
-
-interface ProgressPayload {
-  stage: string;
-  progress: number;
-  message: string;
-}
-
-export function useProgress() {
-  const [progress, setProgress] = useState<ProgressPayload | null>(null);
-
-  useEffect(() => {
-    const unlisten = listen<ProgressPayload>('processing-progress', (event) => {
-      setProgress(event.payload);
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
-
-  return progress;
-}
-```
-
----
-
-## 🔐 Security
-
-### API Key Storage
-
-```typescript
-// Using tauri-plugin-store for preferences
-import { Store } from '@tauri-apps/plugin-store';
-
-const store = new Store('.settings.json');
-
-// Non-sensitive settings
-await store.set('theme', 'dark');
-await store.set('defaultExportPath', '/Users/me/exports');
-await store.save();
-
-// Sensitive data should use OS keychain
-// (via tauri-plugin-stronghold or keytar wrapper)
-```
-
-### Keychain Access (Rust)
-
-```rust
-// src-tauri/src/services/keychain.rs
-
-use keyring::Entry;
-
-pub fn store_api_key(service: &str, key: &str) -> Result<(), keyring::Error> {
-    let entry = Entry::new(service, "api_key")?;
-    entry.set_password(key)?;
-    Ok(())
-}
-
-pub fn get_api_key(service: &str) -> Result<String, keyring::Error> {
-    let entry = Entry::new(service, "api_key")?;
-    entry.get_password()
-}
-
-pub fn delete_api_key(service: &str) -> Result<(), keyring::Error> {
-    let entry = Entry::new(service, "api_key")?;
-    entry.delete_password()?;
-    Ok(())
-}
-```
-
----
-
-## 🧪 Testing
-
-### Rust Unit Tests
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_gps_parsing() {
-        let gpx_content = include_str!("../../test_data/sample.gpx");
-        let track = parse_gpx(gpx_content).unwrap();
-        
-        assert!(!track.points.is_empty());
-        assert!(track.points[0].lat != 0.0);
-    }
-
-    #[test]
-    fn test_time_offset_calculation() {
-        let video_time = "2024-01-15T10:30:05";
-        let gps_time = "2024-01-15T10:30:00";
-        
-        let offset = calculate_offset(video_time, gps_time);
-        assert_eq!(offset, 5);
-    }
-}
-```
-
-### Frontend Tests
-
-```typescript
-// src/__tests__/useProject.test.ts
-
-import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useProjects } from '../hooks/useProject';
-
-// Mock Tauri
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
-}));
-
-describe('useProjects', () => {
-  it('fetches projects list', async () => {
-    const { invoke } = await import('@tauri-apps/api/core');
-    (invoke as any).mockResolvedValue([
-      { id: '1', name: 'Test Project', path: '/test' },
-    ]);
-
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }) => (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
+    tracing::info!(
+        log_dir = %config.log_dir.display(),
+        level = %config.log_level,
+        "Logging initialized"
     );
+    
+    Ok(())
+}
+```
 
-    const { result } = renderHook(() => useProjects(), { wrapper });
+### Usage in Commands
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toHaveLength(1);
-  });
-});
+```rust
+// src-tauri/src/commands/ingest.rs
+
+use tracing::{info, warn, error, instrument, Span};
+use uuid::Uuid;
+
+#[tauri::command]
+#[instrument(
+    name = "import_video",
+    skip(db),
+    fields(
+        correlation_id = %Uuid::new_v4(),
+        video_path = %video_path,
+    )
+)]
+pub async fn import_video(
+    db: State<'_, Database>,
+    project_id: String,
+    video_path: String,
+) -> Result<VideoInfo, String> {
+    info!("Starting video import");
+    
+    // Validate file exists
+    let path = std::path::Path::new(&video_path);
+    if !path.exists() {
+        error!(path = %video_path, "Video file not found");
+        return Err("Video file not found".to_string());
+    }
+    
+    // Extract metadata
+    info!("Extracting metadata with FFprobe");
+    let metadata = match extract_metadata(&video_path).await {
+        Ok(meta) => {
+            info!(
+                duration_secs = meta.duration_secs,
+                width = meta.width,
+                height = meta.height,
+                codec = %meta.codec,
+                "Metadata extracted successfully"
+            );
+            meta
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to extract metadata");
+            return Err(format!("Metadata extraction failed: {}", e));
+        }
+    };
+    
+    // Store in database
+    info!("Storing video reference in database");
+    match db.store_video(&project_id, &video_path, &metadata).await {
+        Ok(video_info) => {
+            info!(video_id = %video_info.id, "Video imported successfully");
+            Ok(video_info)
+        }
+        Err(e) => {
+            error!(error = %e, "Database storage failed");
+            Err(format!("Failed to store video: {}", e))
+        }
+    }
+}
+
+#[instrument(skip_all, fields(video_path = %path))]
+async fn extract_metadata(path: &str) -> Result<VideoMetadata, ProcessError> {
+    info!("Spawning FFprobe sidecar");
+    
+    let start = std::time::Instant::now();
+    
+    let output = tauri::api::process::Command::new_sidecar("ffprobe")
+        .map_err(|e| {
+            error!(error = %e, "Failed to create FFprobe sidecar");
+            ProcessError::SidecarNotFound
+        })?
+        .args([
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+            "-show_streams",
+            path,
+        ])
+        .output()
+        .await
+        .map_err(|e| {
+            error!(error = %e, "FFprobe execution failed");
+            ProcessError::ExecutionFailed(e.to_string())
+        })?;
+    
+    let duration = start.elapsed();
+    info!(duration_ms = duration.as_millis(), "FFprobe completed");
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        warn!(stderr = %stderr, "FFprobe returned non-zero exit code");
+    }
+    
+    let metadata: FFprobeOutput = serde_json::from_slice(&output.stdout)
+        .map_err(|e| {
+            error!(error = %e, "Failed to parse FFprobe output");
+            ProcessError::ParseError(e.to_string())
+        })?;
+    
+    Ok(metadata.into())
+}
+```
+
+### Log Output Examples
+
+**File Output (JSON):**
+```json
+{"timestamp":"2024-01-15T10:30:00.123456Z","level":"INFO","target":"geotruth::commands::ingest","message":"Starting video import","correlation_id":"abc12345-6789-def0-1234-567890abcdef","video_path":"/Users/john/Videos/roadtrip.mp4","span":{"name":"import_video"}}
+{"timestamp":"2024-01-15T10:30:00.124456Z","level":"INFO","target":"geotruth::commands::ingest","message":"Spawning FFprobe sidecar","video_path":"/Users/john/Videos/roadtrip.mp4","span":{"name":"extract_metadata","parent":"import_video"}}
+{"timestamp":"2024-01-15T10:30:00.456789Z","level":"INFO","target":"geotruth::commands::ingest","message":"FFprobe completed","duration_ms":332,"span":{"name":"extract_metadata"}}
+{"timestamp":"2024-01-15T10:30:00.457123Z","level":"INFO","target":"geotruth::commands::ingest","message":"Metadata extracted successfully","duration_secs":3823.5,"width":3840,"height":2160,"codec":"hevc"}
+```
+
+**Console Output (Pretty):**
+```
+  2024-01-15T10:30:00.123Z  INFO import_video{correlation_id=abc12345 video_path=/Users/john/Videos/roadtrip.mp4}: geotruth::commands::ingest: Starting video import
+  2024-01-15T10:30:00.124Z  INFO import_video{...}:extract_metadata{video_path=/Users/john/Videos/roadtrip.mp4}: geotruth::commands::ingest: Spawning FFprobe sidecar
+  2024-01-15T10:30:00.456Z  INFO import_video{...}:extract_metadata{...}: geotruth::commands::ingest: FFprobe completed duration_ms=332
+  2024-01-15T10:30:00.457Z  INFO import_video{...}: geotruth::commands::ingest: Metadata extracted successfully duration_secs=3823.5 width=3840 height=2160 codec="hevc"
 ```
 
 ---
 
-## 📦 Bundling Sidecars
+## 🧩 Frontend Logging
 
-### Sidecar Naming Convention
+```typescript
+// src/lib/logger.ts
 
-Tauri requires specific naming for platform-specific binaries:
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+interface LogContext {
+  component?: string;
+  correlationId?: string;
+  [key: string]: unknown;
+}
+
+class Logger {
+  private component: string;
+  
+  constructor(component: string) {
+    this.component = component;
+  }
+  
+  private log(level: LogLevel, message: string, context: LogContext = {}) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      level,
+      component: this.component,
+      message,
+      ...context,
+    };
+    
+    // In development, pretty print
+    if (import.meta.env.DEV) {
+      const color = {
+        debug: 'color: gray',
+        info: 'color: blue',
+        warn: 'color: orange',
+        error: 'color: red',
+      }[level];
+      
+      console.log(`%c[${level.toUpperCase()}] ${this.component}:`, color, message, context);
+    } else {
+      // In production, structured JSON
+      console.log(JSON.stringify(entry));
+    }
+    
+    // Also send to Rust backend for unified logging
+    if (level === 'error' || level === 'warn') {
+      invoke('log_frontend', { entry });
+    }
+  }
+  
+  debug(message: string, context?: LogContext) { this.log('debug', message, context); }
+  info(message: string, context?: LogContext) { this.log('info', message, context); }
+  warn(message: string, context?: LogContext) { this.log('warn', message, context); }
+  error(message: string, context?: LogContext) { this.log('error', message, context); }
+}
+
+export const createLogger = (component: string) => new Logger(component);
+
+// Usage:
+// const logger = createLogger('Timeline');
+// logger.info('Event selected', { eventId: 'abc123', timestamp: '00:45:30' });
 ```
-binaries/
-├── ffmpeg-x86_64-apple-darwin        # Intel Mac
-├── ffmpeg-aarch64-apple-darwin       # Apple Silicon
-├── ffmpeg-x86_64-pc-windows-msvc.exe # Windows
-├── ffmpeg-x86_64-unknown-linux-gnu   # Linux
-└── ...
-```
 
-### Download Script
+---
+
+## 🔨 Building for Release
+
+### Build Commands
 
 ```bash
-#!/bin/bash
-# scripts/download-sidecars.sh
+# Build for current platform (in Docker)
+docker compose -f docker-compose.dev.yml run --rm dev pnpm tauri build
 
-PLATFORM=$(rustc -vV | sed -n 's/host: //p')
-BINARIES_DIR="binaries"
+# Or use make targets
+make build-macos
+make build-windows
+make build-linux
+```
 
-mkdir -p $BINARIES_DIR
+### Build Output
 
-# FFmpeg
-curl -L "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-$PLATFORM.tar.xz" | tar xJ
-mv ffmpeg-*/bin/ffmpeg "$BINARIES_DIR/ffmpeg-$PLATFORM"
-mv ffmpeg-*/bin/ffprobe "$BINARIES_DIR/ffprobe-$PLATFORM"
+```
+target/release/bundle/
+├── dmg/
+│   └── GeoTruth_1.0.0_aarch64.dmg     # macOS
+├── msi/
+│   └── GeoTruth_1.0.0_x64_en-US.msi   # Windows
+└── appimage/
+    └── GeoTruth_1.0.0_amd64.AppImage  # Linux
+```
 
-# Whisper.cpp
-# ... similar download logic
+---
+
+## 📋 Cargo Dependencies (Latest)
+
+```toml
+# src-tauri/Cargo.toml
+
+[package]
+name = "geotruth-desktop"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.75"
+
+[dependencies]
+# Tauri
+tauri = { version = "2.1", features = ["devtools"] }
+tauri-plugin-store = "2.1"
+
+# Async
+tokio = { version = "1.42", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Database
+duckdb = { version = "1.1", features = ["bundled"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-appender = "0.2"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Utilities
+uuid = { version = "1.11", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5.0"
+
+# GPS parsing
+gpx = "0.10"
+nmea = "0.6"
+
+# Security
+keyring = "3.4"
+
+[build-dependencies]
+tauri-build = "2.0"
 ```
 
 ---
@@ -724,5 +660,6 @@ mv ffmpeg-*/bin/ffprobe "$BINARIES_DIR/ffprobe-$PLATFORM"
 ## 📚 Related Documentation
 
 - [Architecture Overview](../architecture/README.md)
-- [API Reference](../api/README.md)
+- [Logging Guide](../logging.md)
 - [User Guide](../user-guide/README.md)
+- [Backend Services](../backend/README.md)

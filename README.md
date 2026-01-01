@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-blue.svg)](https://tauri.app/)
-[![React](https://img.shields.io/badge/React-18-61dafb.svg)](https://reactjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-24+-blue.svg)](https://docker.com/)
 
 ---
 
@@ -18,6 +18,18 @@ Unlike standard AI tools that "guess" locations and hallucinate facts, GeoTruth 
 
 ---
 
+## 🚀 Zero Local Dependencies
+
+GeoTruth requires **no local software installation** besides the app itself:
+
+| Component | Deployment |
+|-----------|------------|
+| **Desktop App** | Self-contained bundle with all binaries included |
+| **Backend Services** | 100% Docker Compose - single command startup |
+| **Development** | Docker-based - no local Python/Rust/Node required |
+
+---
+
 ## ✨ Key Features
 
 | Feature | Description |
@@ -28,42 +40,49 @@ Unlike standard AI tools that "guess" locations and hallucinate facts, GeoTruth 
 | 🗺️ **Truth Engine** | Map matching, field-of-view filtering, and visual verification |
 | 🤖 **Fact-Checked AI** | Narration grounded in verified geospatial data |
 | ✏️ **Human-in-the-Loop** | Review and correct detections before script generation |
+| 📊 **Detailed Logging** | Structured JSON logs with correlation IDs for debugging |
 
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Option 1: Desktop Application (End Users)
 
-- **Node.js** 18.x or higher
-- **Rust** 1.70 or higher
-- **Docker** and **Docker Compose** (for backend services)
-- **FFmpeg** installed locally
+1. **Download** GeoTruth from [geotruth.io/download](https://geotruth.io/download)
+2. **Install** - Double-click to install (all dependencies bundled)
+3. **Run** - No additional setup required
 
-### Installation
+### Option 2: Backend Services (Docker)
 
 ```bash
 # Clone the repository
 git clone https://github.com/your-org/geotruth-narrative-engine.git
-cd geotruth-narrative-engine
+cd geotruth-narrative-engine/backend
 
-# Install desktop dependencies
-cd desktop
-npm install
+# Start all services (first run downloads images)
+docker compose up -d
 
-# Start development
-npm run tauri dev
+# Check status
+docker compose ps
+
+# View logs
+docker compose logs -f
 ```
 
-### Backend Setup
+**That's it.** No Python, no Node, no Rust installation needed.
+
+### Option 3: Full Development (Docker)
 
 ```bash
-# Start the geo-stack
-cd backend
-docker-compose up -d
+# Clone and start development environment
+git clone https://github.com/your-org/geotruth-narrative-engine.git
+cd geotruth-narrative-engine
 
-# Initialize the database
-./scripts/init-db.sh
+# Start everything in Docker
+docker compose -f docker-compose.dev.yml up -d
+
+# Development server available at http://localhost:5173
+# API available at http://localhost:8000
 ```
 
 ---
@@ -73,11 +92,12 @@ docker-compose up -d
 | Document | Description |
 |----------|-------------|
 | [Architecture Overview](docs/architecture/README.md) | System design and component interactions |
-| [Desktop App Guide](docs/desktop/README.md) | Tauri application development |
-| [Backend Services](docs/backend/README.md) | API and geospatial services |
+| [Desktop App Guide](docs/desktop/README.md) | Self-contained desktop application |
+| [Backend Services](docs/backend/README.md) | Docker-based API and geo services |
+| [Logging Guide](docs/logging.md) | Structured logging and debugging |
 | [User Guide](docs/user-guide/README.md) | End-user documentation |
 | [API Reference](docs/api/README.md) | REST API documentation |
-| [Development Guide](docs/development/README.md) | Contributing and local development |
+| [Development Guide](docs/development/README.md) | Docker-based development workflow |
 
 ---
 
@@ -85,17 +105,20 @@ docker-compose up -d
 
 ```
 /geotruth-narrative-engine
-├── /backend                # Cloud Geo-Intelligence Layer
-│   ├── /app                # FastAPI application
-│   ├── /docker             # Dockerfiles for services
-│   ├── /scripts            # Database migration/init scripts
-│   └── docker-compose.yml  # Service orchestration
-├── /desktop                # Tauri Desktop Application
-│   ├── /src-tauri          # Rust backend (core logic)
-│   ├── /src                # React frontend
-│   └── /binaries           # Sidecars (ffmpeg, whisper)
-├── /docs                   # Comprehensive documentation
-└── /shared                 # Shared types and schemas
+├── /backend                    # Docker-based backend services
+│   ├── /services
+│   │   ├── /api                # FastAPI application (Python 3.12)
+│   │   ├── /geo-db             # PostGIS database
+│   │   ├── /map-matcher        # Valhalla routing engine
+│   │   └── /cache              # Redis caching
+│   ├── docker-compose.yml      # Production orchestration
+│   └── docker-compose.dev.yml  # Development with hot reload
+├── /desktop                    # Tauri Desktop Application
+│   ├── /src-tauri              # Rust backend (bundled)
+│   ├── /src                    # React frontend (bundled)
+│   └── /binaries               # FFmpeg, Whisper (bundled)
+├── /docs                       # Documentation
+└── docker-compose.dev.yml      # Full-stack development
 ```
 
 ---
@@ -115,24 +138,51 @@ Create educational timelines of walking tours where the narration correctly iden
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology |
-|-------|------------|
-| **Desktop App** | Tauri v2 (Rust + React) |
-| **Local Processing** | FFmpeg, Whisper.cpp |
-| **Local Database** | DuckDB |
-| **Cloud Database** | PostGIS |
-| **Map Matching** | Valhalla / OSRM |
-| **Caching** | Redis |
-| **API Server** | FastAPI (Python) |
-| **AI Engine** | Google Gemini |
+| Layer | Technology | Version |
+|-------|------------|---------|
+| **Desktop App** | Tauri v2 (Rust + React) | Latest |
+| **Frontend** | React 19 + Vite 6 | Latest |
+| **Backend Runtime** | Python 3.12 | Latest |
+| **API Framework** | FastAPI 0.115+ | Latest |
+| **Database** | PostgreSQL 17 + PostGIS 3.5 | Latest |
+| **Map Matching** | Valhalla 3.5 | Latest |
+| **Caching** | Redis 7.4 | Latest |
+| **AI Engine** | Google Gemini 2.0 | Latest |
+| **Local Processing** | FFmpeg 7, Whisper.cpp | Latest |
+
+> **Update Policy**: All dependencies are pinned to latest stable versions. Automated weekly checks via Dependabot.
+
+---
+
+## 📊 Observability
+
+GeoTruth includes comprehensive structured logging:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00.123Z",
+  "level": "INFO",
+  "service": "api",
+  "correlation_id": "req-abc123",
+  "message": "Enrichment completed",
+  "context": {
+    "lat": 36.1069,
+    "lon": -112.1129,
+    "pois_found": 3,
+    "duration_ms": 45
+  }
+}
+```
+
+See [Logging Guide](docs/logging.md) for details.
 
 ---
 
 ## 🔐 Security
 
-- **API keys** stored in OS native keychain
+- **API keys** stored in OS native keychain (desktop) or Docker secrets (backend)
 - **JWT-based** authentication
-- **Environment-based** configuration management
+- **Isolated container networks** for service protection
 - **No video data** sent to cloud servers
 
 See [Security Documentation](docs/security/README.md) for details.
@@ -143,26 +193,13 @@ See [Security Documentation](docs/security/README.md) for details.
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Development is 100% Docker-based - no local toolchain required.
 
 ---
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- [Tauri](https://tauri.app/) - Desktop application framework
-- [OpenStreetMap](https://www.openstreetmap.org/) - Geospatial data
-- [Valhalla](https://valhalla.github.io/valhalla/) - Routing engine
-- [Whisper](https://github.com/openai/whisper) - Speech recognition
 
 ---
 

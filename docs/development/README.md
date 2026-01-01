@@ -1,387 +1,320 @@
 # Development Guide
 
-This guide covers setting up your development environment, coding standards, and contribution workflow for GeoTruth.
+GeoTruth development is **100% Docker-based**. No local toolchain installation required.
 
 ---
 
-## 🛠️ Development Environment
+## 🐳 Zero Local Dependencies
+
+You don't need to install:
+- ❌ Rust
+- ❌ Node.js
+- ❌ Python
+- ❌ PostgreSQL
+- ❌ FFmpeg
+
+Everything runs in Docker containers.
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| **Node.js** | 18.x+ | Frontend tooling |
-| **Rust** | 1.70+ | Desktop backend |
-| **Python** | 3.11+ | Backend services |
-| **Docker** | 24.x+ | Container runtime |
-| **Docker Compose** | 2.x+ | Service orchestration |
+| Requirement | Version |
+|-------------|---------|
+| **Docker** | 24.0+ with Compose v2 |
+| **RAM** | 16GB recommended |
+| **Disk** | 50GB free space |
 
-### System Dependencies
-
-#### macOS
+### Clone and Start
 
 ```bash
-# Install Xcode command line tools
-xcode-select --install
-
-# Install Homebrew packages
-brew install node rust python@3.11 docker ffmpeg
-
-# Install Tauri dependencies
-brew install cairo pango
-```
-
-#### Ubuntu/Debian
-
-```bash
-# System packages
-sudo apt update
-sudo apt install -y \
-    build-essential \
-    curl \
-    wget \
-    libssl-dev \
-    libgtk-3-dev \
-    libwebkit2gtk-4.0-dev \
-    librsvg2-dev \
-    ffmpeg
-
-# Node.js
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-#### Windows
-
-```powershell
-# Install Chocolatey first, then:
-choco install nodejs-lts rust python docker-desktop ffmpeg
-
-# Visual Studio Build Tools (required for some Rust crates)
-choco install visualstudio2022buildtools
-```
-
----
-
-## 📂 Repository Setup
-
-### Clone and Initialize
-
-```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/your-org/geotruth-narrative-engine.git
 cd geotruth-narrative-engine
 
-# Install global tools
-npm install -g pnpm
-cargo install tauri-cli
+# Start full development stack
+docker compose -f docker-compose.dev.yml up -d
 
-# Set up all workspaces
-./scripts/setup-dev.sh
+# Check status
+docker compose -f docker-compose.dev.yml ps
 ```
 
-### Project Structure
+### Access Points
+
+| Service | URL |
+|---------|-----|
+| **Desktop Dev** | http://localhost:5173 |
+| **API Docs** | http://localhost:8000/docs |
+| **API Health** | http://localhost:8000/v1/health |
+
+---
+
+## 📁 Project Structure
 
 ```
 geotruth-narrative-engine/
-├── backend/               # Python backend services
-│   ├── app/               # FastAPI application
-│   ├── tests/             # Backend tests
-│   └── docker-compose.yml
-├── desktop/               # Tauri desktop app
-│   ├── src/               # React frontend
-│   ├── src-tauri/         # Rust backend
-│   └── binaries/          # Sidecar binaries
-├── docs/                  # Documentation
-├── scripts/               # Development scripts
-├── .github/               # GitHub workflows
-└── package.json           # Root package for scripts
+├── /backend                      # Docker-based backend
+│   ├── /services
+│   │   ├── /api                  # FastAPI (Python 3.12)
+│   │   ├── /geo-db               # PostGIS 17
+│   │   ├── /map-matcher          # Valhalla 3.5
+│   │   └── /cache                # Redis 7.4
+│   ├── docker-compose.yml        # Production
+│   └── docker-compose.dev.yml    # Development
+├── /desktop                      # Self-contained desktop app
+│   ├── /src                      # React frontend
+│   ├── /src-tauri                # Rust backend
+│   ├── Dockerfile.dev            # Dev container
+│   └── docker-compose.dev.yml    # Dev orchestration
+├── /docs                         # Documentation
+└── docker-compose.dev.yml        # Full-stack development
 ```
 
 ---
 
-## 🖥️ Desktop Development
+## 🔧 Full-Stack Development
 
-### Running the App
+### docker-compose.dev.yml (Root)
 
-```bash
-cd desktop
+```yaml
+version: '3.9'
 
-# Install dependencies
-pnpm install
+services:
+  # ==========================================================================
+  # Desktop Development
+  # ==========================================================================
+  desktop:
+    build:
+      context: ./desktop
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./desktop/src:/app/src:cached
+      - ./desktop/src-tauri/src:/app/src-tauri/src:cached
+      - desktop-cargo:/usr/local/cargo/registry
+      - desktop-target:/app/src-tauri/target
+      - desktop-node:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    networks:
+      - frontend
 
-# Start development (hot reload enabled)
-pnpm tauri dev
-```
+  # ==========================================================================
+  # API Server
+  # ==========================================================================
+  api:
+    build:
+      context: ./backend/services/api
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend/services/api/app:/app/app:cached
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=pretty
+      - POSTGRES_HOST=geo-db
+      - REDIS_URL=redis://cache:6379/0
+      - VALHALLA_URL=http://map-matcher:8002
+    env_file:
+      - ./backend/.env
+    depends_on:
+      geo-db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
 
-### Frontend Only (React)
+  # ==========================================================================
+  # PostGIS Database
+  # ==========================================================================
+  geo-db:
+    image: postgis/postgis:17-3.5-alpine
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/services/geo-db/init-scripts:/docker-entrypoint-initdb.d:ro
+    environment:
+      - POSTGRES_USER=geotruth
+      - POSTGRES_PASSWORD=devpassword
+      - POSTGRES_DB=geotruth
+    ports:
+      - "5432:5432"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geotruth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-```bash
-# Start Vite dev server without Tauri
-pnpm dev
+  # ==========================================================================
+  # Redis Cache
+  # ==========================================================================
+  cache:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-# Access at http://localhost:5173
-```
+  # ==========================================================================
+  # Valhalla Map Matching
+  # ==========================================================================
+  map-matcher:
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    volumes:
+      - valhalla-tiles:/custom_files
+    environment:
+      - tile_urls=https://download.geofabrik.de/north-america/us/california-latest.osm.pbf
+      - serve_tiles=True
+      - build_elevation=False
+    ports:
+      - "8002:8002"
+    networks:
+      - backend
 
-### Backend Only (Rust)
+networks:
+  frontend:
+  backend:
 
-```bash
-cd desktop/src-tauri
-
-# Build and run
-cargo run
-
-# Run tests
-cargo test
-
-# Check for issues
-cargo clippy
-```
-
-### Building for Release
-
-```bash
-cd desktop
-
-# Build optimized bundle
-pnpm tauri build
-
-# Outputs:
-# - macOS: target/release/bundle/dmg/GeoTruth_x.y.z_aarch64.dmg
-# - Windows: target/release/bundle/msi/GeoTruth_x.y.z_x64_en-US.msi
-# - Linux: target/release/bundle/appimage/GeoTruth_x.y.z_amd64.AppImage
+volumes:
+  postgres-data:
+  valhalla-tiles:
+  desktop-cargo:
+  desktop-target:
+  desktop-node:
 ```
 
 ---
 
-## ☁️ Backend Development
+## 🛠️ Development Workflows
 
-### Local Setup
-
-```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-
-# Install dependencies
-pip install -r requirements.txt -r requirements-dev.txt
-
-# Copy environment template
-cp .env.example .env
-# Edit .env with your API keys
-```
-
-### Running Services
+### Starting Development
 
 ```bash
-# Start all services (recommended)
-docker-compose up -d
-
-# Start API server only (for debugging)
-uvicorn app.main:app --reload --port 8000
+# Start all services
+docker compose -f docker-compose.dev.yml up -d
 
 # View logs
-docker-compose logs -f api
+docker compose -f docker-compose.dev.yml logs -f
+
+# View specific service
+docker compose -f docker-compose.dev.yml logs -f api
 ```
 
-### Database Management
+### Hot Reload
+
+All services support hot reload:
+
+| Service | Trigger |
+|---------|---------|
+| **Desktop Frontend** | Save `.tsx` file |
+| **Desktop Backend** | Save `.rs` file |
+| **API** | Save `.py` file |
+
+### Running Commands Inside Containers
 
 ```bash
-# Run migrations
-docker-compose exec api alembic upgrade head
+# API shell
+docker compose -f docker-compose.dev.yml exec api bash
 
-# Create new migration
-docker-compose exec api alembic revision -m "description"
+# Run Python command
+docker compose -f docker-compose.dev.yml exec api python -c "print('hello')"
 
-# Seed POI data
-docker-compose exec api python scripts/seed-pois.py
+# Run Rust command
+docker compose -f docker-compose.dev.yml exec desktop cargo test
+
+# Run npm command
+docker compose -f docker-compose.dev.yml exec desktop pnpm test
 ```
 
-### API Testing
+### Database Access
 
 ```bash
-# Run tests
-pytest tests/ -v
+# Connect to PostgreSQL
+docker compose -f docker-compose.dev.yml exec geo-db psql -U geotruth -d geotruth
 
-# With coverage
-pytest tests/ --cov=app --cov-report=html
-
-# Run specific test
-pytest tests/test_enrich.py::test_single_point -v
+# Run SQL file
+docker compose -f docker-compose.dev.yml exec -T geo-db psql -U geotruth -d geotruth < migration.sql
 ```
-
----
-
-## 📝 Coding Standards
-
-### TypeScript/React
-
-```typescript
-// Use functional components with TypeScript
-interface EventCardProps {
-  event: Event;
-  onSelect: (id: string) => void;
-}
-
-export function EventCard({ event, onSelect }: EventCardProps) {
-  return (
-    <div 
-      className="event-card"
-      onClick={() => onSelect(event.id)}
-    >
-      <h3>{event.name}</h3>
-      <span>{event.timestamp}</span>
-    </div>
-  );
-}
-```
-
-**Guidelines:**
-- Use TypeScript strict mode
-- Prefer functional components with hooks
-- Use TanStack Query for data fetching
-- Keep components small and focused
-
-### Rust
-
-```rust
-/// Process a video file and extract metadata.
-/// 
-/// # Arguments
-/// * `path` - Path to the video file
-/// 
-/// # Returns
-/// * `Result<VideoInfo, ProcessError>` - Video metadata or error
-/// 
-/// # Example
-/// ```
-/// let info = process_video("/path/to/video.mp4").await?;
-/// println!("Duration: {} seconds", info.duration_secs);
-/// ```
-pub async fn process_video(path: &str) -> Result<VideoInfo, ProcessError> {
-    let sidecar = SidecarRunner::new();
-    sidecar.get_video_info(path).await
-}
-```
-
-**Guidelines:**
-- Use `Result<T, E>` for error handling
-- Document public functions with `///` comments
-- Run `cargo fmt` before committing
-- Run `cargo clippy` and fix warnings
-
-### Python
-
-```python
-from typing import Optional
-from pydantic import BaseModel
-
-class EnrichRequest(BaseModel):
-    """Request model for GPS enrichment."""
-    
-    lat: float
-    lon: float
-    timestamp: Optional[str] = None
-    heading_deg: Optional[float] = None
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "lat": 36.1069,
-                "lon": -112.1129,
-                "timestamp": "2024-01-15T10:30:00Z"
-            }
-        }
-
-
-async def enrich_point(request: EnrichRequest) -> EnrichResponse:
-    """
-    Enrich a GPS point with geospatial context.
-    
-    Args:
-        request: The enrichment request containing coordinates.
-        
-    Returns:
-        EnrichResponse with location context and nearby POIs.
-        
-    Raises:
-        ValueError: If coordinates are out of bounds.
-    """
-    # Implementation
-    pass
-```
-
-**Guidelines:**
-- Use type hints everywhere
-- Use Pydantic for request/response models
-- Format with `black` and `isort`
-- Check with `ruff` linter
 
 ---
 
 ## 🧪 Testing
 
-### Frontend Tests
-
-```bash
-cd desktop
-
-# Run all tests
-pnpm test
-
-# Watch mode
-pnpm test:watch
-
-# Coverage report
-pnpm test:coverage
-```
-
-### Rust Tests
-
-```bash
-cd desktop/src-tauri
-
-# All tests
-cargo test
-
-# Specific test
-cargo test process_video
-
-# With output
-cargo test -- --nocapture
-```
-
 ### Backend Tests
 
 ```bash
-cd backend
-
-# All tests
-pytest
-
-# Specific file
-pytest tests/test_enrich.py
-
-# Specific test
-pytest tests/test_enrich.py::test_batch_enrichment
+# Run all tests
+docker compose -f docker-compose.dev.yml exec api pytest
 
 # With coverage
-pytest --cov=app --cov-report=term-missing
+docker compose -f docker-compose.dev.yml exec api pytest --cov=app --cov-report=html
+
+# Specific test
+docker compose -f docker-compose.dev.yml exec api pytest tests/test_enrich.py -v
 ```
 
-### End-to-End Tests
+### Desktop Tests
 
 ```bash
-# Start all services
-docker-compose up -d
+# Rust tests
+docker compose -f docker-compose.dev.yml exec desktop cargo test
 
-# Run E2E tests
-pnpm test:e2e
+# Frontend tests
+docker compose -f docker-compose.dev.yml exec desktop pnpm test
+```
+
+### E2E Tests
+
+```bash
+# Run E2E test suite
+docker compose -f docker-compose.test.yml up --abort-on-container-exit
+```
+
+---
+
+## 📝 Code Standards
+
+### Formatting
+
+All formatting is enforced via pre-commit hooks (run in Docker):
+
+```bash
+# Format all code
+docker compose -f docker-compose.dev.yml exec api ruff format .
+docker compose -f docker-compose.dev.yml exec api ruff check --fix .
+docker compose -f docker-compose.dev.yml exec desktop cargo fmt
+docker compose -f docker-compose.dev.yml exec desktop pnpm format
+```
+
+### Linting
+
+```bash
+# Python
+docker compose -f docker-compose.dev.yml exec api ruff check .
+docker compose -f docker-compose.dev.yml exec api mypy app
+
+# Rust
+docker compose -f docker-compose.dev.yml exec desktop cargo clippy
+
+# TypeScript
+docker compose -f docker-compose.dev.yml exec desktop pnpm lint
 ```
 
 ---
@@ -391,11 +324,11 @@ pnpm test:e2e
 ### Branching
 
 ```
-main                 # Production-ready code
-├── develop          # Integration branch
+main                 # Production-ready
+├── develop          # Integration
 ├── feature/xxx      # New features
 ├── fix/xxx          # Bug fixes
-└── docs/xxx         # Documentation updates
+└── docs/xxx         # Documentation
 ```
 
 ### Commit Messages
@@ -403,135 +336,132 @@ main                 # Production-ready code
 Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-feat(desktop): add timeline zoom controls
-fix(backend): correct POI distance calculation
+feat(api): add batch enrichment endpoint
+fix(desktop): correct GPS offset calculation
 docs(api): update authentication examples
-refactor(rust): simplify sidecar error handling
-test(enrich): add batch processing tests
-chore: update dependencies
 ```
 
-### Pull Request Process
+### Pre-Commit Hooks
 
-1. **Create branch** from `develop`
-   ```bash
-   git checkout develop
-   git pull origin develop
-   git checkout -b feature/my-feature
-   ```
+Hooks run in Docker, so no local tools needed:
 
-2. **Make changes** with tests
-
-3. **Run checks**
-   ```bash
-   pnpm lint
-   pnpm test
-   cargo clippy
-   cargo test
-   pytest
-   ```
-
-4. **Push and create PR**
-   ```bash
-   git push origin feature/my-feature
-   ```
-
-5. **Fill PR template** with:
-   - Description of changes
-   - Screenshots (if UI)
-   - Test coverage
-   - Breaking changes (if any)
-
----
-
-## 🏗️ Architecture Decisions
-
-### ADR Template
-
-Create new ADRs in `docs/adr/`:
-
-```markdown
-# ADR-001: Use DuckDB for Local Storage
-
-## Status
-Accepted
-
-## Context
-We need a local database for storing project data and GPS points.
-
-## Decision
-Use DuckDB instead of SQLite because:
-- Better performance for analytical queries
-- Native support for JSON types
-- Excellent Rust bindings
-
-## Consequences
-- Learning curve for team members unfamiliar with DuckDB
-- Need to bundle DuckDB library with the app
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: format-python
+        name: Format Python
+        entry: docker compose -f docker-compose.dev.yml exec -T api ruff format .
+        language: system
+        files: \.py$
 ```
 
 ---
 
-## 🔧 Debugging
+## 📦 Building Releases
 
 ### Desktop App
 
-**React DevTools:**
-- Open with `Cmd/Ctrl+Shift+I`
-- React tab for component inspection
-- Network tab for API calls
-
-**Rust Debugging:**
 ```bash
-# Enable debug logging
-RUST_LOG=debug pnpm tauri dev
+# Build for current platform
+docker compose -f docker-compose.dev.yml exec desktop pnpm tauri build
 
-# Use VS Code with CodeLLDB extension for breakpoints
+# Build outputs in desktop/target/release/bundle/
 ```
 
-### Backend
+### Docker Images
 
-**FastAPI Debug:**
 ```bash
-# Run with auto-reload and debug
-uvicorn app.main:app --reload --log-level debug
+# Build production images
+docker compose -f backend/docker-compose.yml build
 
-# API docs at http://localhost:8000/docs
-```
-
-**Database Queries:**
-```bash
-# Connect to PostGIS
-docker-compose exec geo-db psql -U geotruth -d geotruth
-
-# View slow queries
-SELECT query, calls, mean_time 
-FROM pg_stat_statements 
-ORDER BY mean_time DESC 
-LIMIT 10;
+# Tag and push
+docker tag geotruth/api:latest registry.example.com/geotruth/api:v1.0.0
+docker push registry.example.com/geotruth/api:v1.0.0
 ```
 
 ---
 
-## 📚 Resources
+## 🐛 Debugging
 
-### Documentation
+### View Logs
 
-- [Tauri v2 Guides](https://v2.tauri.app/guides/)
-- [FastAPI Tutorial](https://fastapi.tiangolo.com/tutorial/)
-- [PostGIS Documentation](https://postgis.net/docs/)
-- [DuckDB Rust API](https://duckdb.org/docs/api/rust)
+```bash
+# All services
+docker compose -f docker-compose.dev.yml logs -f
 
-### Internal Docs
+# Filter by level (requires jq)
+docker compose -f docker-compose.dev.yml logs api --no-log-prefix | jq 'select(.level == "ERROR")'
+```
 
+### Attach Debugger
+
+**Python (VS Code):**
+```json
+{
+  "name": "Python: Remote Attach",
+  "type": "debugpy",
+  "request": "attach",
+  "connect": {"host": "localhost", "port": 5678}
+}
+```
+
+**Rust:** Use `println!` or `tracing` (debugger attachment complex in containers)
+
+### Database Inspection
+
+```bash
+# List tables
+docker compose -f docker-compose.dev.yml exec geo-db psql -U geotruth -d geotruth -c "\dt"
+
+# Query POIs
+docker compose -f docker-compose.dev.yml exec geo-db psql -U geotruth -d geotruth -c "SELECT * FROM pois LIMIT 5"
+```
+
+---
+
+## 📊 Latest Package Versions
+
+All dependencies are pinned to latest stable versions:
+
+### Backend (Python 3.12)
+
+| Package | Version |
+|---------|---------|
+| fastapi | 0.115+ |
+| pydantic | 2.10+ |
+| sqlalchemy | 2.0+ |
+| redis | 5.2+ |
+
+### Desktop (Rust 1.83)
+
+| Crate | Version |
+|-------|---------|
+| tauri | 2.1+ |
+| tokio | 1.42+ |
+| duckdb | 1.1+ |
+| tracing | 0.1+ |
+
+### Frontend (Node 22)
+
+| Package | Version |
+|---------|---------|
+| react | 19+ |
+| vite | 6+ |
+| typescript | 5.7+ |
+
+### Update Policy
+
+- **Weekly**: Dependabot PRs reviewed
+- **Monthly**: Major version upgrades evaluated
+- **Quarterly**: Full dependency audit
+
+---
+
+## 📚 Related Documentation
+
+- [Backend Services](../backend/README.md)
+- [Desktop Application](../desktop/README.md)
+- [Logging Guide](../logging.md)
 - [Architecture Overview](../architecture/README.md)
-- [API Reference](../api/README.md)
-- [Security Guidelines](../security/README.md)
-
----
-
-## 🤝 Getting Help
-
-- **Discord**: [#dev-help channel](https://discord.gg/geotruth)
-- **GitHub Issues**: For bugs and features
-- **Team Meetings**: Every Tuesday 10am PT
