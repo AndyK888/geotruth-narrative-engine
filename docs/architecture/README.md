@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the high-level architecture of the GeoTruth Narrative Engine, emphasizing **zero local dependencies**, **service isolation**, and **structured logging**.
+This document describes the high-level architecture of the GeoTruth Narrative Engine, emphasizing **zero local dependencies**, **service isolation**, and **Hybrid Connectivity**.
 
 ---
 
@@ -8,24 +8,27 @@ This document describes the high-level architecture of the GeoTruth Narrative En
 
 ### Core Principles
 
-1. **Zero Local Dependencies**
-   - Backend: 100% Docker containers
-   - Desktop: Self-contained app with bundled binaries
-   - Development: Docker-based, no local toolchain
+1. **Hybrid Connectivity**
+   - **Online Mode**: Uses Docker-based backend for high-fidelity verification.
+   - **Offline Mode**: Uses local Rust-based "Truth Engine" for standalone usage.
+   - *Result*: The app works 100% offline for travelers in remote areas.
 
-2. **Service Isolation**
-   - Each service in its own container
-   - Internal network for sensitive services
-   - No direct database access from outside
+2. **Zero Local Dependencies**
+   - Backend: 100% Docker containers.
+   - Desktop: Self-contained app with bundled binaries (FFmpeg, Whisper, Llama.cpp).
+   - Development: Docker-based, no local toolchain.
 
-3. **Structured Logging**
-   - JSON format for machine parsing
-   - Correlation IDs across all services
-   - Unified log format everywhere
+3. **Service Isolation**
+   - Each backend service in its own container.
+   - Internal network for sensitive services.
+
+4. **Structured Logging**
+   - JSON format for machine parsing.
+   - Correlation IDs across all services.
 
 ---
 
-## 🏗️ Deployment Architecture
+## 🏗️ Hybrid Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -33,14 +36,20 @@ This document describes the high-level architecture of the GeoTruth Narrative En
 │                                                                              │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │                    GeoTruth Desktop App (Bundled)                       │ │
+│  │                                                                         │ │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────────┐   │ │
 │  │  │ React UI     │  │ Rust Core    │  │ Bundled Binaries           │   │ │
 │  │  │ (Bundled)    │  │ (Compiled)   │  │ FFmpeg, Whisper, Tesseract │   │ │
-│  │  └──────────────┘  └──────────────┘  └────────────────────────────┘   │ │
-│  └────────────────────────────────┬───────────────────────────────────────┘ │
-│                                   │                                          │
-│                                   │ HTTPS (Anonymized GPS only)             │
-│                                   ▼                                          │
+│  │  └──────┬───────┘  └──────┬───────┘  │ Llama.cpp (Optional)       │   │ │
+│  │         │                 │          └────────────────────────────┘   │ │
+│  │         │          ┌──────▼──────┐                                    │ │
+│  │         │          │ Local Truth │ ◄── [OFFLINE PATH]                 │ │
+│  │         │          │ Engine      │    Map Matching & Geocoding        │ │
+│  │         │          └──────┬──────┘    via PMTiles                     │ │
+│  │         │                 │                                           │ │
+│  └─────────┼─────────────────┼───────────────────────────────────────────┘ │
+│            │                 │                                             │
+│            ▼                 ▼ [ONLINE PATH]                               │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │                    Docker Compose (Backend)                             │ │
 │  │                                                                          │ │
@@ -95,48 +104,45 @@ sequenceDiagram
     Note over App: All local - no network
 ```
 
-### 2. Enrichment Phase (Cloud - Docker)
+### 2. Enrichment Phase (Verification)
+
+The app chooses the path based on connectivity and settings.
+
+#### A. Online Mode (Docker)
 
 ```mermaid
 sequenceDiagram
     participant App as Desktop App
     participant API as API (Container)
-    participant Cache as Redis (Container)
-    participant Valhalla as Valhalla (Container)
-    participant PG as PostGIS (Container)
+    participant PostGIS as PostGIS (Container)
     
-    App->>API: POST /v1/enrich_batch (GPS points only)
-    Note over App,API: Correlation-ID: abc123
-    
-    API->>Cache: Check cache
-    alt Cache Hit
-        Cache-->>API: Cached enrichment
-    else Cache Miss
-        API->>Valhalla: Map match GPS
-        Valhalla-->>API: Snapped route
-        API->>PG: Query nearby POIs
-        PG-->>API: Verified locations
-        API->>Cache: Store in cache
-    end
-    
-    API-->>App: Truth Bundle JSON
+    App->>API: POST /v1/enrich_batch
+    API->>PostGIS: SQL Query (High Fidelity)
+    PostGIS-->>API: Verified Results
+    API-->>App: Truth Bundle
 ```
 
-### 3. Narration Phase (AI)
+#### B. Offline Mode (Local)
 
 ```mermaid
 sequenceDiagram
     participant App as Desktop App
-    participant API as API Server
-    participant Gemini as Google Gemini
+    participant Local as Local Truth Engine
+    participant PMTiles as PMTiles Reader
     
-    App->>API: POST /v1/narrate
-    Note over API: Bundle: Truth + Transcript
-    API->>Gemini: Constrained prompt
-    Note over Gemini: "Only mention verified POIs"
-    Gemini-->>API: Fact-checked narration
-    API-->>App: Chapters + Script
+    App->>Local: Request Enrichment
+    Local->>PMTiles: Query Vector Tiles
+    PMTiles-->>Local: Road/POI Data
+    Local-->>App: Truth Bundle (Offline Verified)
 ```
+
+### 3. Narration Phase (AI)
+
+#### A. Online (Gemini)
+High creativity, broader knowledge, faster inference (cloud GPU).
+
+#### B. Offline (Llama.cpp)
+Private, works anywhere, dependent on user hardware.
 
 ---
 
@@ -144,171 +150,17 @@ sequenceDiagram
 
 ### Network Isolation
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Docker Networks                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Frontend Network (frontend)                                 │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │                                                         │ │
-│  │  ┌─────────────┐                                       │ │
-│  │  │  API Server │ ◄──── External Access (Port 8000)     │ │
-│  │  └──────┬──────┘                                       │ │
-│  │         │                                               │ │
-│  └─────────┼───────────────────────────────────────────────┘ │
-│            │                                                 │
-│  Backend Network (backend)  [internal: true]                │
-│  ┌─────────┼───────────────────────────────────────────────┐ │
-│  │         ▼                                               │ │
-│  │  ┌────────────┐  ┌──────────┐  ┌────────────────────┐  │ │
-│  │  │  PostGIS   │  │  Redis   │  │  Valhalla          │  │ │
-│  │  │            │  │          │  │                    │  │ │
-│  │  └────────────┘  └──────────┘  └────────────────────┘  │ │
-│  │                                                         │ │
-│  │  ⛔ No external access - only API can reach these      │ │
-│  └─────────────────────────────────────────────────────────┘ │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
+Services are isolated in Docker networks (`frontend` vs `backend`).
 
-### Secret Management
-
-| Location | Storage Method |
-|----------|---------------|
-| Desktop App | OS Keychain (macOS Keychain, Windows Credential Manager) |
-| Backend | Docker Secrets / Environment Variables |
-
----
-
-## 📊 Logging Architecture
-
-All components emit structured JSON logs with correlation IDs:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Log Flow                                │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Desktop App                                                 │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │  Rust Backend → JSON logs → File (~/.../logs/)          ││
-│  │  React Frontend → Console logs → Rust (errors/warnings) ││
-│  └─────────────────────────────────────────────────────────┘│
-│                                                              │
-│  Backend Services                                            │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │  API → JSON logs → stdout → Docker logging driver       ││
-│  │  PostGIS → stdout → Docker logging driver               ││
-│  │  Redis → stdout → Docker logging driver                 ││
-│  │  Valhalla → stdout → Docker logging driver              ││
-│  └─────────────────────────────────────────────────────────┘│
-│                            │                                 │
-│                            ▼                                 │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │  Log Aggregation (Optional)                              ││
-│  │  ELK Stack / Grafana Loki / CloudWatch                   ││
-│  └─────────────────────────────────────────────────────────┘│
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Correlation ID Flow
-
-```
-Request Flow:
-Desktop App ─────────────────────────────────────────────────────────►
-    │                                                                 
-    │ X-Correlation-ID: abc-123                                      
-    ▼                                                                 
-API Server ──────────────────────────────────────────────────────────►
-    │ Log: {"correlation_id": "abc-123", "message": "Enriching..."}  
-    │                                                                 
-    │ Internal calls include correlation_id                          
-    ▼                                                                 
-PostGIS ─────────────────────────────────────────────────────────────►
-    │ Log: {"correlation_id": "abc-123", "query_ms": 15}             
-    ▼                                                                 
-Response ◄───────────────────────────────────────────────────────────
-    X-Correlation-ID: abc-123
-```
-
----
-
-## 🧰 Technology Matrix
-
-### Latest Versions (Pinned)
-
-| Component | Technology | Version | Container |
-|-----------|------------|---------|-----------|
-| **API Runtime** | Python | 3.12 | ✅ |
-| **API Framework** | FastAPI | 0.115+ | ✅ |
-| **Database** | PostgreSQL + PostGIS | 17 + 3.5 | ✅ |
-| **Routing** | Valhalla | 3.5 | ✅ |
-| **Cache** | Redis | 7.4 | ✅ |
-| **Desktop Runtime** | Rust | 1.83 | Bundled |
-| **Desktop UI** | React | 19 | Bundled |
-| **Video Processing** | FFmpeg | 7.1 | Bundled |
-| **Transcription** | Whisper.cpp | 1.7 | Bundled |
-| **Local DB** | DuckDB | 1.1 | Compiled |
-
----
-
-## 📁 Data Models
-
-### Event (Desktop - DuckDB)
-
-```sql
-CREATE TABLE events (
-    id UUID PRIMARY KEY,
-    project_id UUID NOT NULL,
-    video_path TEXT NOT NULL,
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP NOT NULL,
-    geo_lat DOUBLE,
-    geo_lon DOUBLE,
-    event_type TEXT,
-    confidence FLOAT,
-    truth_json JSON,
-    transcript TEXT,
-    narration TEXT,
-    user_verified BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### Truth Bundle (API Response)
-
-```json
-{
-  "event_id": "uuid",
-  "correlation_id": "req-abc123",
-  "matched_location": {
-    "lat": 36.1069,
-    "lon": -112.1129,
-    "road_name": "AZ-64"
-  },
-  "visible_pois": [
-    {
-      "name": "Grand Canyon South Rim",
-      "type": "natural_landmark",
-      "confidence": 0.95
-    }
-  ],
-  "processing": {
-    "map_match_ms": 45,
-    "poi_query_ms": 12,
-    "cache_hit": false
-  }
-}
-```
+### Privacy
+- **Offline Mode**: No network calls made. 100% Air-gapped compatible.
+- **Online Mode**: Anonymized GPS data sent to backend; Original video *never* sent.
 
 ---
 
 ## 📚 Related Documentation
 
+- [Local Intelligence Layer (Offline)](local-intelligence.md)
 - [Backend Services](../backend/README.md)
 - [Desktop Application](../desktop/README.md)
 - [Logging Guide](../logging.md)
-- [API Reference](../api/README.md)
-- [Security Guidelines](../security/README.md)
