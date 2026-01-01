@@ -5,7 +5,9 @@
 pub mod ffmpeg;
 pub mod whisper;
 pub mod database;
+pub mod gps;
 
 pub use ffmpeg::Ffmpeg;
 pub use whisper::Whisper;
 pub use database::LocalDatabase;
+pub use gps::{parse_gps_file, GpsTrack, GpsPoint};
