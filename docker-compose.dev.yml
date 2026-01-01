@@ -1,0 +1,125 @@
+version: '3.9'
+
+# =============================================================================
+# GeoTruth Full-Stack Development Environment
+# Runs all services for local development
+# Usage: docker compose -f docker-compose.dev.yml up
+# =============================================================================
+
+services:
+  # ==========================================================================
+  # Desktop Development (Vite + React)
+  # ==========================================================================
+  desktop:
+    build:
+      context: ./desktop
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./desktop/src:/app/src:cached
+      - ./desktop/index.html:/app/index.html:cached
+      - ./desktop/vite.config.ts:/app/vite.config.ts:cached
+      - desktop-node:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    networks:
+      - frontend
+
+  # ==========================================================================
+  # API Server (FastAPI)
+  # ==========================================================================
+  api:
+    build:
+      context: ./backend/services/api
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend/services/api/app:/app/app:cached
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=pretty
+      - POSTGRES_HOST=geo-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=geotruth
+      - POSTGRES_PASSWORD=devpassword
+      - POSTGRES_DB=geotruth
+      - REDIS_URL=redis://cache:6379/0
+      - VALHALLA_URL=http://map-matcher:8002
+    depends_on:
+      geo-db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+
+  # ==========================================================================
+  # PostGIS Database
+  # ==========================================================================
+  geo-db:
+    image: postgis/postgis:17-3.5-alpine
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/services/geo-db/init-scripts:/docker-entrypoint-initdb.d:ro
+    environment:
+      - POSTGRES_USER=geotruth
+      - POSTGRES_PASSWORD=devpassword
+      - POSTGRES_DB=geotruth
+    ports:
+      - "5432:5432"
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U geotruth" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # Redis Cache
+  # ==========================================================================
+  cache:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # Valhalla Map Matching (optional for Week 1-6)
+  # ==========================================================================
+  map-matcher:
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    volumes:
+      - valhalla-tiles:/custom_files
+    environment:
+      - tile_urls=https://download.geofabrik.de/north-america/us/california-latest.osm.pbf
+      - serve_tiles=True
+      - build_elevation=False
+    ports:
+      - "8002:8002"
+    networks:
+      - backend
+    profiles:
+      - full # Only start with --profile full
+
+networks:
+  frontend:
+  backend:
+
+
+volumes:
+  postgres-data:
+  valhalla-tiles:
+  desktop-node:

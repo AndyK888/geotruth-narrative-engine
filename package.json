@@ -1,0 +1,35 @@
+{
+  "name": "geotruth-narrative-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turn raw travel footage into fact-checked, AI-narrated stories",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/geotruth-narrative-engine.git"
+  },
+  "author": "GeoTruth Team",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter desktop dev",
+    "dev:desktop": "pnpm --filter desktop dev",
+    "dev:backend": "docker compose -f backend/docker-compose.dev.yml up",
+    "dev:full": "docker compose -f docker-compose.dev.yml up",
+    "build": "pnpm --filter desktop build",
+    "build:desktop": "pnpm --filter desktop build",
+    "build:backend": "docker compose -f backend/docker-compose.yml build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
+    "clean": "pnpm -r clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "prettier": "^3.4.0",
+    "typescript": "^5.7.0"
+  }
+}

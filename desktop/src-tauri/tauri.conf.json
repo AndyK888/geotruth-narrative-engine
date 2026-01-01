@@ -1,0 +1,73 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "GeoTruth",
+    "version": "0.1.0",
+    "identifier": "com.geotruth.app",
+    "build": {
+        "beforeDevCommand": "pnpm dev",
+        "devUrl": "http://localhost:5173",
+        "beforeBuildCommand": "pnpm build",
+        "frontendDist": "../dist"
+    },
+    "app": {
+        "windows": [
+            {
+                "title": "GeoTruth Narrative Engine",
+                "width": 1200,
+                "height": 800,
+                "minWidth": 900,
+                "minHeight": 600,
+                "resizable": true,
+                "fullscreen": false,
+                "center": true,
+                "decorations": true,
+                "transparent": false
+            }
+        ],
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "resources": [],
+        "externalBin": [],
+        "copyright": "© 2024 GeoTruth Team",
+        "category": "Productivity",
+        "shortDescription": "Turn travel footage into fact-checked stories",
+        "longDescription": "GeoTruth is a desktop application that transforms raw travel footage into fact-checked, AI-narrated stories using a 'Verify First, Narrate Second' architecture.",
+        "macOS": {
+            "entitlements": null,
+            "exceptionDomain": "",
+            "frameworks": [],
+            "minimumSystemVersion": "10.15"
+        },
+        "windows": {
+            "certificateThumbprint": null,
+            "digestAlgorithm": "sha256",
+            "timestampUrl": ""
+        },
+        "linux": {
+            "appimage": {
+                "bundleMediaFramework": true
+            },
+            "deb": {
+                "depends": []
+            }
+        }
+    },
+    "plugins": {
+        "shell": {
+            "open": true,
+            "scope": []
+        }
+    }
+}
