@@ -4,6 +4,8 @@
 
 pub mod ffmpeg;
 pub mod whisper;
+pub mod database;
 
 pub use ffmpeg::Ffmpeg;
 pub use whisper::Whisper;
+pub use database::LocalDatabase;

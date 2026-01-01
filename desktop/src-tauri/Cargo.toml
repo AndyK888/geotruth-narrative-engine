@@ -44,6 +44,9 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 # Chrono for timestamps
 chrono = { version = "0.4", features = ["serde"] }
 
+# DuckDB for local storage
+duckdb = { version = "1.1", features = ["bundled"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
