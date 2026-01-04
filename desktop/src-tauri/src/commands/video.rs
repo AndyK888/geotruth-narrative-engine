@@ -50,24 +50,16 @@ pub async fn auto_scan_moments(
         std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
     }
 
-    // Extract every 10 seconds
-    let interval = 10.0;
-    let thumbnails = ffmpeg.extract_thumbnails(&video_path, &output_dir, interval)
+    // Extract key moments using scene detection (threshold 0.4)
+    let thumbnails = ffmpeg.extract_key_moments(&video_path, &output_dir, 0.4)
         .await
         .map_err(|e| e.to_string())?;
 
     // Map paths to moments
-    let mut moments = Vec::new();
-    for (i, path) in thumbnails.iter().enumerate() {
-        let timestamp = (i as f64) * interval + 1.0; // Offset slightly? Or i * interval
-        // Actually ffmpeg extract_thumbnails with fps=1/10 outputs frame 1 at 0s, frame 2 at 10s...
-        // The checking logic in extract_thumbnails uses standard numbering.
-        
-        moments.push(ScannedMoment {
-            timestamp: (i as f64) * interval,
-            image_path: path.to_string_lossy().to_string(),
-        });
-    }
+    let moments = thumbnails.into_iter().map(|m| ScannedMoment {
+        timestamp: m.timestamp,
+        image_path: m.path.to_string_lossy().to_string(),
+    }).collect();
 
     Ok(moments)
 }

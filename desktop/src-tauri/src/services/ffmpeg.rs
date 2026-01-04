@@ -182,32 +182,62 @@ impl Ffmpeg {
         Ok(metadata)
     }
     
-    /// Extract thumbnail frames from video
+    /// Extract thumbnails from video at fixed intervals
     pub async fn extract_thumbnails(
         &self,
         video_path: &PathBuf,
         output_dir: &PathBuf,
         interval_seconds: f64,
-    ) -> Result<Vec<PathBuf>, FfmpegError> {
+    ) -> Result<Vec<VideoMoment>, FfmpegError> {
+        self.run_extraction(video_path, output_dir, FilterMode::Interval(interval_seconds)).await
+    }
+
+    /// Extract key moments using scene detection
+    pub async fn extract_key_moments(
+        &self,
+        video_path: &PathBuf,
+        output_dir: &PathBuf,
+        threshold: f32, // 0.0 to 1.0 (0.4 is good default)
+    ) -> Result<Vec<VideoMoment>, FfmpegError> {
+        self.run_extraction(video_path, output_dir, FilterMode::Scene(threshold)).await
+    }
+
+    async fn run_extraction(
+        &self,
+        video_path: &PathBuf,
+        output_dir: &PathBuf,
+        mode: FilterMode,
+    ) -> Result<Vec<VideoMoment>, FfmpegError> {
         if !self.ffmpeg_path.exists() {
             return Err(FfmpegError::BinaryNotFound(self.ffmpeg_path.clone()));
         }
         
-        debug!("Extracting thumbnails from: {:?}", video_path);
+        debug!("Extracting frames from: {:?} (Mode: {:?})", video_path, mode);
         
+        // Ensure output dir exists
+        if !output_dir.exists() {
+            std::fs::create_dir_all(output_dir)?;
+        }
+
         let output_pattern = output_dir.join("thumb_%04d.jpg");
         
+        let filter = match mode {
+            FilterMode::Interval(seconds) => format!("fps=1/{},showinfo", seconds),
+            FilterMode::Scene(threshold) => format!("select='gt(scene,{})',showinfo", threshold),
+        };
+
+        let args = vec![
+            "-i".to_string(),
+            video_path.to_string_lossy().to_string(),
+            "-vf".to_string(), filter,
+            "-vsync".to_string(), "vfr".to_string(),
+            "-q:v".to_string(), "2".to_string(),
+            "-y".to_string(),
+            output_pattern.to_string_lossy().to_string(),
+        ];
+
         let output = Command::new(&self.ffmpeg_path)
-            .args([
-                "-i",
-            ])
-            .arg(video_path)
-            .args([
-                "-vf", &format!("fps=1/{}", interval_seconds),
-                "-q:v", "2",
-                "-y",
-            ])
-            .arg(&output_pattern)
+            .args(&args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -217,25 +247,62 @@ impl Ffmpeg {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(FfmpegError::ExecutionFailed(stderr.to_string()));
         }
-        
-        // Collect generated thumbnails
-        let mut thumbnails = Vec::new();
-        if let Ok(entries) = std::fs::read_dir(output_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.file_name()
-                    .map(|n| n.to_string_lossy().starts_with("thumb_"))
-                    .unwrap_or(false)
-                {
-                    thumbnails.push(path);
+
+        // Parse timestamps from stderr
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let mut timestamps: Vec<f64> = Vec::new();
+
+        for line in stderr.lines() {
+            if line.contains("Parsed_showinfo") && line.contains("pts_time:") {
+                // Example: ... pts_time:12.345 ...
+                if let Some(idx) = line.find("pts_time:") {
+                    let rest = &line[idx + 9..];
+                    let end = rest.find(' ').unwrap_or(rest.len());
+                    let val_str = &rest[..end];
+                    if let Ok(ts) = val_str.parse::<f64>() {
+                        timestamps.push(ts);
+                    }
                 }
             }
         }
         
-        thumbnails.sort();
-        info!("Extracted {} thumbnails", thumbnails.len());
-        Ok(thumbnails)
+        // Collect generated thumbnails
+        let mut moments = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(output_dir) {
+            let mut paths: Vec<PathBuf> = entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.file_name().map(|n| n.to_string_lossy().starts_with("thumb_")).unwrap_or(false))
+                .collect();
+            
+            paths.sort(); // thumb_0001, thumb_0002... matches timestamp order
+            
+            for (i, path) in paths.into_iter().enumerate() {
+                let timestamp = if i < timestamps.len() { timestamps[i] } else { 0.0 };
+                moments.push(VideoMoment {
+                    path,
+                    timestamp
+                });
+            }
+        }
+        
+        info!("Extracted {} frames", moments.len());
+        Ok(moments)
     }
+
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoMoment {
+    pub path: PathBuf,
+    pub timestamp: f64,
+}
+
+#[derive(Debug)]
+enum FilterMode {
+    Interval(f64),
+    Scene(f32),
+
     
     /// Extract audio from video as WAV (for Whisper)
     pub async fn extract_audio(

@@ -152,7 +152,7 @@ export function MomentCatcher({ videoPath, onMomentCaptured, onAutoCaptured }: M
                     className="flex items-center gap-2 px-4 py-3 rounded-full font-bold shadow-xl bg-purple-600 text-white hover:bg-purple-500 hover:scale-105 transition-all text-sm"
                 >
                     {analyzing ? <Sparkles size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                    Auto-Analyze
+                    Detect Key Moments
                 </button>
 
                 <button
