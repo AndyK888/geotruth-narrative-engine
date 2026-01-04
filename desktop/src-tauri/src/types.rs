@@ -124,10 +124,13 @@ pub struct TruthBundle {
 // =============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NarrateRequest {
     pub truth_bundle: TruthBundle,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transcript: Option<String>,
+    #[serde(default)]
+    pub scene_frames: Vec<String>, // Base64 encoded images
     #[serde(default)]
     pub options: HashMap<String, serde_json::Value>,
 }

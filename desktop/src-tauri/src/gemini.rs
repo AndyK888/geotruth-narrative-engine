@@ -23,18 +23,37 @@ impl GeminiClient {
     }
 
     pub async fn generate_content(&self, prompt: &str) -> Result<String> {
+        self.generate_multimodal(prompt, vec![]).await
+    }
+
+    pub async fn generate_multimodal(&self, prompt: &str, images_base64: Vec<String>) -> Result<String> {
         if self.api_key.is_empty() {
              bail!("Gemini API Key is missing. Please configure it.");
         }
 
         let url = format!("{}/{}:generateContent?key={}", GEMINI_API_BASE, self.model, self.api_key);
         
+        // Build parts
+        let mut parts = vec![Part {
+            text: Some(prompt.to_string()),
+            inline_data: None,
+        }];
+
+        // Add images
+        for img in images_base64 {
+            parts.push(Part {
+                text: None,
+                inline_data: Some(InlineData {
+                    mime_type: "image/jpeg".to_string(), // Assuming JPEG for now
+                    data: img,
+                }),
+            });
+        }
+        
         let request = GenerateContentRequest {
             contents: vec![Content {
                 role: "user".to_string(),
-                parts: vec![Part {
-                    text: prompt.to_string(),
-                }],
+                parts,
             }],
         };
 
@@ -54,8 +73,11 @@ impl GeminiClient {
         
         if let Some(candidate) = result.candidates.first() {
             if let Some(part) = candidate.content.parts.first() {
-                info!("Gemini response received successfully");
-                return Ok(part.text.clone());
+                // Return text content from response
+                if let Some(text) = &part.text {
+                     info!("Gemini response received successfully");
+                     return Ok(text.clone());
+                }
             }
         }
 
@@ -75,8 +97,19 @@ struct Content {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Part {
-    text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inline_data: Option<InlineData>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InlineData {
+    mime_type: String,
+    data: String,
 }
 
 #[derive(Deserialize)]

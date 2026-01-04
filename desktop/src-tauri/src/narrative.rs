@@ -20,8 +20,17 @@ impl NarrativeEngine {
 
         let prompt = self.build_narration_prompt(&request);
         
-        // Call Gemini
-        let response_text = match self.gemini.generate_content(&prompt).await {
+        // Pre-process images (strip data URI prefix if present)
+        let images: Vec<String> = request.scene_frames.iter().map(|img| {
+            if let Some(idx) = img.find(',') {
+                img[idx+1..].to_string()
+            } else {
+                img.clone()
+            }
+        }).collect();
+
+        // Call Gemini (Multimodal)
+        let response_text = match self.gemini.generate_multimodal(&prompt, images).await {
             Ok(text) => text,
             Err(e) => {
                 warn!("Gemini API call failed: {}", e);
