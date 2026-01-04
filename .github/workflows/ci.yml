@@ -126,6 +126,8 @@ jobs:
           POSTGRES_PASSWORD: ci_test_password
         run: |
           cd backend
+          # Create dummy .env file for CI validation
+          echo "POSTGRES_PASSWORD=ci_test_password" > .env
           docker compose config > /dev/null
 
   # ==========================================================================
