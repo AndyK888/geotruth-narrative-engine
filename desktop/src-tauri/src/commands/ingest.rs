@@ -39,7 +39,8 @@ pub struct GpsTrackSummary {
 /// Import a video file with optional GPS track
 #[tauri::command]
 pub async fn import_video(
-    state: State<'_, AppState>,
+    db: State<'_, LocalDatabase>, // Injected directly
+    ffmpeg_state: State<'_, AppState>, // Keeping for ffmpeg access
     project_id: String,
     video_path: String,
     gps_path: Option<String>,
@@ -54,8 +55,9 @@ pub async fn import_video(
     }
     
     // Extract metadata with FFmpeg
+    // Extract metadata with FFmpeg
     let metadata = {
-        let ffmpeg_guard = state.ffmpeg.lock().await;
+        let ffmpeg_guard = ffmpeg_state.ffmpeg.lock().await;
         if let Some(ref ffmpeg) = *ffmpeg_guard {
             match ffmpeg.extract_metadata(&video_path).await {
                 Ok(m) => Some(m),
@@ -65,6 +67,9 @@ pub async fn import_video(
                 }
             }
         } else {
+            // Try to initialize FFmpeg on fly if missing? Or just error?
+            // For now, warn and skip metadata
+             error!("FFmpeg not initialized in state");
             None
         }
     };
@@ -98,34 +103,29 @@ pub async fn import_video(
     
     // Store in database
     let video_id = {
-        let db_guard = state.db.lock().await;
-        if let Some(ref db) = *db_guard {
-            let filename = video_path.file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-            
-            let video_metadata = metadata.as_ref().map(|m| {
-                crate::services::database::VideoMetadata {
-                    duration_seconds: m.duration_seconds,
-                    fps: m.fps,
-                    width: m.width,
-                    height: m.height,
-                    codec: m.codec.clone(),
-                    file_size_bytes: m.file_size_bytes.map(|s| s as i64),
-                }
-            });
-            
-            match db.add_video(
-                &project_id,
-                &filename,
-                &video_path.to_string_lossy(),
-                video_metadata,
-            ).await {
-                Ok(video) => video.id,
-                Err(e) => return Err(format!("Database error: {}", e)),
+        let filename = video_path.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        
+        let video_metadata = metadata.as_ref().map(|m| {
+            crate::services::database::VideoMetadata {
+                duration_seconds: m.duration_seconds,
+                fps: m.fps,
+                width: m.width,
+                height: m.height,
+                codec: m.codec.clone(),
+                file_size_bytes: m.file_size_bytes.map(|s| s as i64),
             }
-        } else {
-            return Err("Database not initialized".to_string());
+        });
+        
+        match db.add_video(
+            &project_id,
+            &filename,
+            &video_path.to_string_lossy(),
+            video_metadata,
+        ).await {
+            Ok(video) => video.id,
+            Err(e) => return Err(format!("Database error: {}", e)),
         }
     };
     
@@ -188,53 +188,38 @@ fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
 /// Get project videos
 #[tauri::command]
 pub async fn get_project_videos(
-    state: State<'_, AppState>,
+    db: State<'_, LocalDatabase>,
     project_id: String,
 ) -> Result<Vec<crate::services::database::Video>, String> {
     debug!("Getting videos for project: {}", project_id);
     
-    let db_guard = state.db.lock().await;
-    if let Some(ref db) = *db_guard {
-        db.get_project_videos(&project_id)
-            .await
-            .map_err(|e| format!("Database error: {}", e))
-    } else {
-        Err("Database not initialized".to_string())
-    }
+    db.get_project_videos(&project_id)
+        .await
+        .map_err(|e| format!("Database error: {}", e))
 }
 
 /// Create a new project
 #[tauri::command]
 pub async fn create_project(
-    state: State<'_, AppState>,
+    db: State<'_, LocalDatabase>,
     name: String,
     description: Option<String>,
 ) -> Result<crate::services::database::Project, String> {
     info!("Creating project: {}", name);
     
-    let db_guard = state.db.lock().await;
-    if let Some(ref db) = *db_guard {
-        db.create_project(&name, description.as_deref())
-            .await
-            .map_err(|e| format!("Database error: {}", e))
-    } else {
-        Err("Database not initialized".to_string())
-    }
+    db.create_project(&name, description.as_deref())
+        .await
+        .map_err(|e| format!("Database error: {}", e))
 }
 
 /// Get all projects
 #[tauri::command]
 pub async fn get_projects(
-    state: State<'_, AppState>,
+    db: State<'_, LocalDatabase>,
 ) -> Result<Vec<crate::services::database::Project>, String> {
     debug!("Getting all projects");
     
-    let db_guard = state.db.lock().await;
-    if let Some(ref db) = *db_guard {
-        db.get_projects()
-            .await
-            .map_err(|e| format!("Database error: {}", e))
-    } else {
-        Err("Database not initialized".to_string())
-    }
+    db.get_projects()
+        .await
+        .map_err(|e| format!("Database error: {}", e))
 }

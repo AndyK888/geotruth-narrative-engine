@@ -92,15 +92,25 @@ pub fn run() {
             info!("Application setup complete");
 
             // Initialize Database
-            let db_state = DbState::new(app.handle())
-                .expect("Failed to initialize database");
-            app.manage(db_state);
+            use services::database::LocalDatabase;
+            let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+            let db_path = app_data_dir.join("geotruth.duckdb");
+            
+            let db = LocalDatabase::open(db_path).expect("Failed to initialize database");
+            
+            // Run async init
+            tauri::async_runtime::block_on(async {
+                db.init().await.expect("Failed to run database migrations");
+            });
+            
+            app.manage(db);
 
-            // Initialize Legacy Ingest State
+            // Initialize Legacy Ingest State (Deprecated but keeping valid types for now)
+            // We shouldn't need this if we update commands, but let's keep empty struct to avoid breaking other things if any
             use commands::ingest::AppState as IngestState;
             use tokio::sync::Mutex;
             app.manage(IngestState {
-                db: Mutex::new(None),
+                db: Mutex::new(None), // We will not use this anymore
                 ffmpeg: Mutex::new(None),
             });
 

@@ -33,7 +33,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # HTTP Client (for API communication)
-reqwest = { version = "0.12", features = ["json"] }
+# HTTP Client (for API communication)
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Async Utilities
+futures-util = "0.3"
 
 # Error Handling
 thiserror = "2.0"

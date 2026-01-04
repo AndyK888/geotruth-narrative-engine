@@ -283,7 +283,8 @@ pub async fn download_map_region(region_id: String) -> Result<(), String> {
         });
     }
     
-    // Download file
+    // Download file with streaming for progress
+    use futures_util::StreamExt;
     let client = reqwest::Client::new();
     let response = client.get(url)
         .send()
@@ -300,21 +301,32 @@ pub async fn download_map_region(region_id: String) -> Result<(), String> {
         }
     }
     
-    let bytes = response.bytes()
-        .await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
+    let mut file = std::fs::File::create(&file_path).map_err(|e| format!("Failed to create file: {}", e))?;
+    let mut downloaded: u64 = 0;
+    let mut stream = response.bytes_stream();
+    
+    while let Some(item) = stream.next().await {
+        let chunk = item.map_err(|e| format!("Error while downloading: {}", e))?;
+        std::io::Write::write_all(&mut file, &chunk).map_err(|e| format!("Error while writing to file: {}", e))?;
+        downloaded += chunk.len() as u64;
+        
+        {
+            let mut progress = DOWNLOAD_PROGRESS.write().await;
+            if let Some(p) = progress.as_mut() {
+                p.bytes_downloaded = downloaded;
+                p.progress_percent = (downloaded as f64 / total_size as f64) * 100.0;
+            }
+        }
+    }
     
     {
         let mut progress = DOWNLOAD_PROGRESS.write().await;
         if let Some(p) = progress.as_mut() {
-            p.bytes_downloaded = bytes.len() as u64;
+            p.bytes_downloaded = downloaded;
             p.progress_percent = 100.0;
             p.status = "Saving...".to_string();
         }
     }
-    
-    // Save file
-    std::fs::write(&file_path, &bytes).map_err(|e| format!("Failed to save: {}", e))?;
     
     info!("Download complete: {:?} ({} bytes)", file_path, bytes.len());
     
