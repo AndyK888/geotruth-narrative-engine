@@ -11,10 +11,12 @@
         "shell:allow-open",
         "dialog:default",
         "fs:default",
+        "fs:allow-read-file",
+        "fs:allow-open",
         {
             "identifier": "fs:scope",
             "allow": [
-                "$HOME/**",
+                "/Users/andriikaprii/**",
                 "/Volumes/**"
             ]
         }
