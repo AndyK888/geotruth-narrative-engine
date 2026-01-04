@@ -8,6 +8,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
@@ -53,7 +54,7 @@ async def check_database_connection() -> bool:
     """Check if database is reachable."""
     try:
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
             return True
     except Exception as e:
         logger.warning(f"Database connection check failed: {e}")
