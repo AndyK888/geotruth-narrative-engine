@@ -69,11 +69,14 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::get_version,
             commands::check_api_connection,
             commands::get_system_info,
             commands::get_map_regions,
+            commands::get_available_regions,
+            commands::add_region,
             commands::download_map_region,
             commands::delete_map_region,
             commands::get_download_progress,

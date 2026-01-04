@@ -172,7 +172,7 @@
 }
 
 .download-progress {
-    width: 150px;
+    width: 250px;
     height: 36px;
     background: rgba(0, 0, 0, 0.3);
     border-radius: 8px;

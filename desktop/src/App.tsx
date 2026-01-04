@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { MapPacksModal } from './components/MapPacksModal';
 
 function App() {
@@ -47,6 +48,32 @@ function App() {
         setMapPacksStatus({ downloaded, total });
     };
 
+    const handleImportVideo = async () => {
+        try {
+            const selected = await open({
+                multiple: false,
+                filters: [{
+                    name: 'Video',
+                    extensions: ['mp4', 'mov', 'avi', 'mkv']
+                }]
+            });
+
+            if (selected) {
+                const videoPath = selected as string;
+                // Import to default project "default"
+                await invoke('import_video', {
+                    projectId: 'default',
+                    videoPath,
+                    gpsPath: null
+                });
+                alert(`Video imported successfully!\nPath: ${videoPath}`);
+            }
+        } catch (e) {
+            console.error('Import failed:', e);
+            alert(`Import failed: ${e}`);
+        }
+    };
+
     return (
         <div className="app">
             <header className="app-header">
@@ -73,7 +100,7 @@ function App() {
                     <p className="subtitle">Turn raw travel footage into fact-checked, AI-narrated stories</p>
 
                     <div className="feature-cards">
-                        <div className="feature-card">
+                        <div className="feature-card clickable" onClick={handleImportVideo}>
                             <div className="feature-icon">🎥</div>
                             <h3>Import Video</h3>
                             <p>Drag & drop your travel footage with GPS data</p>
@@ -90,7 +117,7 @@ function App() {
                         </div>
                     </div>
 
-                    <div className="action-buttons">
+                    {/* <div className="action-buttons">
                         <button className="primary-button" disabled>
                             <span className="button-icon">📁</span>
                             Import Project
@@ -101,7 +128,7 @@ function App() {
                             New Project
                             <span className="coming-soon">Coming Soon</span>
                         </button>
-                    </div>
+                    </div> */}
                 </section>
 
                 <section className="status-section">

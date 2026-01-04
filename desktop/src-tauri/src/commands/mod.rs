@@ -11,6 +11,13 @@ pub mod narrate;
 pub mod enrich;
 pub mod process;
 
+
+
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use once_cell::sync::Lazy;
+
 // Re-export commonly used types
 // pub use ingest::{AppState, import_video, get_project_videos, create_project, get_projects};
 // pub use narrate::narrate;
@@ -80,9 +87,7 @@ pub struct SystemInfo {
 // Map Region Commands
 // =============================================================================
 
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use once_cell::sync::Lazy;
+
 
 /// Region data structure for frontend
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -107,44 +112,74 @@ pub struct DownloadProgress {
 }
 
 /// Global map regions state
+/// Global available regions catalog (Hardcoded for now - exhaustive list)
+static AVAILABLE_REGIONS: Lazy<Vec<RegionInfo>> = Lazy::new(|| {
+    vec![
+        // USA
+        RegionInfo { id: "us/alabama".to_string(), name: "Alabama (US)".to_string(), size_mb: 250, downloaded: false, last_updated: None, poi_count: 50000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/alaska".to_string(), name: "Alaska (US)".to_string(), size_mb: 150, downloaded: false, last_updated: None, poi_count: 50000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/arizona".to_string(), name: "Arizona (US)".to_string(), size_mb: 200, downloaded: false, last_updated: None, poi_count: 80000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/arkansas".to_string(), name: "Arkansas (US)".to_string(), size_mb: 180, downloaded: false, last_updated: None, poi_count: 60000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/california".to_string(), name: "California (US)".to_string(), size_mb: 1100, downloaded: false, last_updated: None, poi_count: 450000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/colorado".to_string(), name: "Colorado (US)".to_string(), size_mb: 220, downloaded: false, last_updated: None, poi_count: 100000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/connecticut".to_string(), name: "Connecticut (US)".to_string(), size_mb: 80, downloaded: false, last_updated: None, poi_count: 40000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/delaware".to_string(), name: "Delaware (US)".to_string(), size_mb: 40, downloaded: false, last_updated: None, poi_count: 20000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/district-of-columbia".to_string(), name: "District of Columbia (US)".to_string(), size_mb: 30, downloaded: false, last_updated: None, poi_count: 15000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/florida".to_string(), name: "Florida (US)".to_string(), size_mb: 450, downloaded: false, last_updated: None, poi_count: 200000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/georgia".to_string(), name: "Georgia (US)".to_string(), size_mb: 300, downloaded: false, last_updated: None, poi_count: 120000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/hawaii".to_string(), name: "Hawaii (US)".to_string(), size_mb: 50, downloaded: false, last_updated: None, poi_count: 25000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/idaho".to_string(), name: "Idaho (US)".to_string(), size_mb: 150, downloaded: false, last_updated: None, poi_count: 40000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/illinois".to_string(), name: "Illinois (US)".to_string(), size_mb: 350, downloaded: false, last_updated: None, poi_count: 150000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/indiana".to_string(), name: "Indiana (US)".to_string(), size_mb: 200, downloaded: false, last_updated: None, poi_count: 80000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/iowa".to_string(), name: "Iowa (US)".to_string(), size_mb: 180, downloaded: false, last_updated: None, poi_count: 60000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/kansas".to_string(), name: "Kansas (US)".to_string(), size_mb: 160, downloaded: false, last_updated: None, poi_count: 50000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/kentucky".to_string(), name: "Kentucky (US)".to_string(), size_mb: 200, downloaded: false, last_updated: None, poi_count: 70000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/louisiana".to_string(), name: "Louisiana (US)".to_string(), size_mb: 220, downloaded: false, last_updated: None, poi_count: 80000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/maine".to_string(), name: "Maine (US)".to_string(), size_mb: 120, downloaded: false, last_updated: None, poi_count: 40000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/maryland".to_string(), name: "Maryland (US)".to_string(), size_mb: 150, downloaded: false, last_updated: None, poi_count: 60000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/massachusetts".to_string(), name: "Massachusetts (US)".to_string(), size_mb: 200, downloaded: false, last_updated: None, poi_count: 90000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/michigan".to_string(), name: "Michigan (US)".to_string(), size_mb: 350, downloaded: false, last_updated: None, poi_count: 140000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/minnesota".to_string(), name: "Minnesota (US)".to_string(), size_mb: 250, downloaded: false, last_updated: None, poi_count: 90000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/mississippi".to_string(), name: "Mississippi (US)".to_string(), size_mb: 160, downloaded: false, last_updated: None, poi_count: 50000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/missouri".to_string(), name: "Missouri (US)".to_string(), size_mb: 250, downloaded: false, last_updated: None, poi_count: 90000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/montana".to_string(), name: "Montana (US)".to_string(), size_mb: 180, downloaded: false, last_updated: None, poi_count: 40000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/nebraska".to_string(), name: "Nebraska (US)".to_string(), size_mb: 160, downloaded: false, last_updated: None, poi_count: 40000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/nevada".to_string(), name: "Nevada (US)".to_string(), size_mb: 120, downloaded: false, last_updated: None, poi_count: 30000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/new-hampshire".to_string(), name: "New Hampshire (US)".to_string(), size_mb: 80, downloaded: false, last_updated: None, poi_count: 30000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/new-jersey".to_string(), name: "New Jersey (US)".to_string(), size_mb: 180, downloaded: false, last_updated: None, poi_count: 80000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/new-mexico".to_string(), name: "New Mexico (US)".to_string(), size_mb: 150, downloaded: false, last_updated: None, poi_count: 40000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/new-york".to_string(), name: "New York (US)".to_string(), size_mb: 450, downloaded: false, last_updated: None, poi_count: 200000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/north-carolina".to_string(), name: "North Carolina (US)".to_string(), size_mb: 300, downloaded: false, last_updated: None, poi_count: 120000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/north-dakota".to_string(), name: "North Dakota (US)".to_string(), size_mb: 100, downloaded: false, last_updated: None, poi_count: 20000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/ohio".to_string(), name: "Ohio (US)".to_string(), size_mb: 350, downloaded: false, last_updated: None, poi_count: 140000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/oklahoma".to_string(), name: "Oklahoma (US)".to_string(), size_mb: 200, downloaded: false, last_updated: None, poi_count: 70000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/oregon".to_string(), name: "Oregon (US)".to_string(), size_mb: 250, downloaded: false, last_updated: None, poi_count: 90000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/pennsylvania".to_string(), name: "Pennsylvania (US)".to_string(), size_mb: 350, downloaded: false, last_updated: None, poi_count: 140000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/rhode-island".to_string(), name: "Rhode Island (US)".to_string(), size_mb: 40, downloaded: false, last_updated: None, poi_count: 15000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/south-carolina".to_string(), name: "South Carolina (US)".to_string(), size_mb: 200, downloaded: false, last_updated: None, poi_count: 70000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/south-dakota".to_string(), name: "South Dakota (US)".to_string(), size_mb: 120, downloaded: false, last_updated: None, poi_count: 30000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/tennessee".to_string(), name: "Tennessee (US)".to_string(), size_mb: 220, downloaded: false, last_updated: None, poi_count: 80000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/texas".to_string(), name: "Texas (US)".to_string(), size_mb: 850, downloaded: false, last_updated: None, poi_count: 350000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/utah".to_string(), name: "Utah (US)".to_string(), size_mb: 150, downloaded: false, last_updated: None, poi_count: 50000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/vermont".to_string(), name: "Vermont (US)".to_string(), size_mb: 80, downloaded: false, last_updated: None, poi_count: 20000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/virginia".to_string(), name: "Virginia (US)".to_string(), size_mb: 250, downloaded: false, last_updated: None, poi_count: 90000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/washington".to_string(), name: "Washington (US)".to_string(), size_mb: 300, downloaded: false, last_updated: None, poi_count: 120000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/west-virginia".to_string(), name: "West Virginia (US)".to_string(), size_mb: 120, downloaded: false, last_updated: None, poi_count: 40000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/wisconsin".to_string(), name: "Wisconsin (US)".to_string(), size_mb: 250, downloaded: false, last_updated: None, poi_count: 90000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "us/wyoming".to_string(), name: "Wyoming (US)".to_string(), size_mb: 120, downloaded: false, last_updated: None, poi_count: 30000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        // Europe Examples
+        RegionInfo { id: "europe/monaco".to_string(), name: "Monaco".to_string(), size_mb: 1, downloaded: false, last_updated: None, poi_count: 500, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "europe/france".to_string(), name: "France".to_string(), size_mb: 3500, downloaded: false, last_updated: None, poi_count: 1500000, bounds: (0.0, 0.0, 0.0, 0.0) },
+        RegionInfo { id: "europe/germany".to_string(), name: "Germany".to_string(), size_mb: 3200, downloaded: false, last_updated: None, poi_count: 1400000, bounds: (0.0, 0.0, 0.0, 0.0) },
+    ]
+});
+
+/// Global map regions state (User added regions)
 static MAP_REGIONS: Lazy<Arc<RwLock<Vec<RegionInfo>>>> = Lazy::new(|| {
     Arc::new(RwLock::new(vec![
-        RegionInfo {
-            id: "monaco".to_string(),
-            name: "Monaco (Test - 1MB)".to_string(),
-            size_mb: 1,
-            downloaded: false,
-            last_updated: None,
-            poi_count: 500,
-            bounds: (43.72, 7.41, 43.75, 7.44),
-        },
-        RegionInfo {
-            id: "us-southwest".to_string(),
-            name: "US Southwest (Grand Canyon, Utah Parks)".to_string(),
-            size_mb: 80,
-            downloaded: false,
-            last_updated: None,
-            poi_count: 25000,
-            bounds: (31.0, -120.0, 42.0, -102.0),
-        },
-        RegionInfo {
-            id: "us-west".to_string(),
-            name: "US West Coast".to_string(),
-            size_mb: 150,
-            downloaded: false,
-            last_updated: None,
-            poi_count: 50000,
-            bounds: (32.0, -125.0, 49.0, -110.0),
-        },
-        RegionInfo {
-            id: "us-east".to_string(),
-            name: "US East Coast".to_string(),
-            size_mb: 200,
-            downloaded: false,
-            last_updated: None,
-            poi_count: 75000,
-            bounds: (25.0, -85.0, 45.0, -66.0),
-        },
+        // Defaults
+        AVAILABLE_REGIONS.iter().find(|r| r.id == "europe/monaco").unwrap().clone(),
+        AVAILABLE_REGIONS.iter().find(|r| r.id == "us/california").unwrap().clone(),
     ]))
 });
 
@@ -153,12 +188,37 @@ static DOWNLOAD_PROGRESS: Lazy<Arc<RwLock<Option<DownloadProgress>>>> = Lazy::ne
     Arc::new(RwLock::new(None))
 });
 
-/// Get all available map regions
+/// Get all available map regions from catalog
+#[tauri::command]
+pub async fn get_available_regions() -> Vec<RegionInfo> {
+    AVAILABLE_REGIONS.clone()
+}
+
+/// Add a region to my map packs
+#[tauri::command]
+pub async fn add_region(region_id: String) -> Result<(), String> {
+    let mut regions = MAP_REGIONS.write().await;
+    
+    // Check if already added
+    if regions.iter().any(|r| r.id == region_id) {
+        return Ok(());
+    }
+
+    // Find in catalog
+    if let Some(region) = AVAILABLE_REGIONS.iter().find(|r| r.id == region_id) {
+        regions.push(region.clone());
+        // TODO: Save to persistence file here
+        Ok(())
+    } else {
+        Err(format!("Region not found in catalog: {}", region_id))
+    }
+}
+
+/// Get my map regions
 #[tauri::command]
 pub async fn get_map_regions() -> Vec<RegionInfo> {
     let regions = MAP_REGIONS.read().await;
     
-    // Check which regions are already downloaded
     let data_dir = dirs::data_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("com.geotruth.app")
@@ -166,7 +226,9 @@ pub async fn get_map_regions() -> Vec<RegionInfo> {
     
     regions.iter().map(|r| {
         let mut region = r.clone();
-        let path = data_dir.join(format!("{}.osm.pbf", r.id));
+        // sanitize id for filename (replace / with _)
+        let filename = r.id.replace("/", "_");
+        let path = data_dir.join(format!("{}.osm.pbf", filename));
         region.downloaded = path.exists();
         region
     }).collect()
@@ -191,12 +253,22 @@ pub async fn download_map_region(region_id: String) -> Result<(), String> {
         .join("tiles");
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     
-    let file_path = data_dir.join(format!("{}.osm.pbf", region_id));
+    let file_path = data_dir.join(format!("{}.osm.pbf", region_id.replace("/", "_")));
     
     // Get download URL based on region
-    let url = match region_id.as_str() {
-        "monaco" => "https://download.geofabrik.de/europe/monaco-latest.osm.pbf",
-        _ => return Err(format!("Download not yet available for: {}", region_id)),
+    // Dynamic Geofabrik URL construction
+    let url = if region_id.starts_with("us/") {
+        let state = region_id.strip_prefix("us/").unwrap();
+        format!("https://download.geofabrik.de/north-america/us/{}-latest.osm.pbf", state)
+    } else if region_id.starts_with("europe/") {
+        let country = region_id.strip_prefix("europe/").unwrap();
+        format!("https://download.geofabrik.de/europe/{}-latest.osm.pbf", country)
+    } else {
+        match region_id.as_str() {
+            "monaco" => "https://download.geofabrik.de/europe/monaco-latest.osm.pbf".to_string(),
+            "california" => "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf".to_string(), // Legacy fallback
+            _ => return Err(format!("Download logic not implemented for: {}", region_id)),
+        }
     };
     
     // Initialize progress
@@ -263,7 +335,7 @@ pub async fn delete_map_region(region_id: String) -> Result<(), String> {
         .join("com.geotruth.app")
         .join("tiles");
     
-    let file_path = data_dir.join(format!("{}.osm.pbf", region_id));
+    let file_path = data_dir.join(format!("{}.osm.pbf", region_id.replace("/", "_")));
     
     if file_path.exists() {
         std::fs::remove_file(&file_path).map_err(|e| format!("Failed to delete: {}", e))?;
