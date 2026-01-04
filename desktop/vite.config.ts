@@ -9,7 +9,7 @@ export default defineConfig({
   clearScreen: false,
   server: {
     port: 5173,
-    strictPort: true,
+    strictPort: false, // Allow Vite to find next available port if 5173 is busy
     watch: {
       // Tell Vite to ignore watching `src-tauri`
       ignored: ['**/src-tauri/**'],

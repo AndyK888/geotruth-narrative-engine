@@ -168,10 +168,21 @@ install_frontend() {
 }
 
 # =============================================================================
-# Start Desktop App
+# Cleanup and Start Desktop App
 # =============================================================================
+cleanup_ports() {
+    # Kill any process using port 5173 (Vite dev server)
+    if lsof -ti:5173 &>/dev/null; then
+        log_warn "Port 5173 in use, freeing it..."
+        lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+}
+
 start_desktop_native() {
     log_step "Starting native desktop app..."
+    
+    cleanup_ports
     
     cd desktop
     pnpm tauri dev &
@@ -183,6 +194,8 @@ start_desktop_native() {
 
 start_desktop_web() {
     log_step "Starting web-only mode..."
+    
+    cleanup_ports
     
     cd desktop
     pnpm dev &
