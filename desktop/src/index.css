@@ -11,23 +11,23 @@
   --color-bg-tertiary: #1a1a24;
   --color-bg-glass: rgba(255, 255, 255, 0.03);
   --color-bg-glass-hover: rgba(255, 255, 255, 0.06);
-  
+
   --color-text-primary: #f0f0f5;
   --color-text-secondary: #8a8a9a;
   --color-text-muted: #5a5a6a;
-  
+
   --color-accent-primary: #6366f1;
   --color-accent-secondary: #8b5cf6;
   --color-accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  
+
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
   --color-info: #3b82f6;
-  
+
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-hover: rgba(255, 255, 255, 0.15);
-  
+
   /* Typography */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-size-xs: 0.75rem;
@@ -38,7 +38,7 @@
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
   --font-size-4xl: 2.25rem;
-  
+
   /* Spacing */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
@@ -46,20 +46,20 @@
   --spacing-lg: 1.5rem;
   --spacing-xl: 2rem;
   --spacing-2xl: 3rem;
-  
+
   /* Border Radius */
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
   --radius-full: 9999px;
-  
+
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
-  
+
   /* Transitions */
   --transition-fast: 150ms ease;
   --transition-base: 250ms ease;
@@ -67,7 +67,9 @@
 }
 
 /* Reset & Base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -96,7 +98,7 @@ body::before {
   left: 0;
   right: 0;
   bottom: 0;
-  background: 
+  background:
     radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
     radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
   pointer-events: none;
@@ -168,9 +170,17 @@ body::before {
   transition: var(--transition-base);
 }
 
-.status-indicator.online { filter: drop-shadow(0 0 8px var(--color-success)); }
-.status-indicator.offline { filter: drop-shadow(0 0 8px var(--color-warning)); }
-.status-indicator.checking { animation: pulse 1.5s infinite; }
+.status-indicator.online {
+  filter: drop-shadow(0 0 8px var(--color-success));
+}
+
+.status-indicator.offline {
+  filter: drop-shadow(0 0 8px var(--color-warning));
+}
+
+.status-indicator.checking {
+  animation: pulse 1.5s infinite;
+}
 
 .version {
   font-size: var(--font-size-xs);
@@ -261,7 +271,8 @@ body::before {
   flex-wrap: wrap;
 }
 
-.primary-button, .secondary-button {
+.primary-button,
+.secondary-button {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -297,7 +308,8 @@ body::before {
   border-color: var(--color-border-hover);
 }
 
-.primary-button:disabled, .secondary-button:disabled {
+.primary-button:disabled,
+.secondary-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -350,6 +362,16 @@ body::before {
   border-radius: var(--radius-md);
 }
 
+.status-item.clickable {
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.status-item.clickable:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border-hover);
+}
+
 .status-label {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -360,10 +382,21 @@ body::before {
   font-size: var(--font-size-sm);
 }
 
-.status-value.online { color: var(--color-success); }
-.status-value.offline { color: var(--color-warning); }
-.status-value.ready { color: var(--color-success); }
-.status-value.checking { color: var(--color-info); }
+.status-value.online {
+  color: var(--color-success);
+}
+
+.status-value.offline {
+  color: var(--color-warning);
+}
+
+.status-value.ready {
+  color: var(--color-success);
+}
+
+.status-value.checking {
+  color: var(--color-info);
+}
 
 .retry-button {
   background: transparent;
@@ -404,8 +437,15 @@ body::before {
    ============================================================================= */
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes fadeIn {
@@ -413,13 +453,15 @@ body::before {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.welcome-section, .status-section {
+.welcome-section,
+.status-section {
   animation: fadeIn 0.6s ease-out;
 }
 
@@ -428,9 +470,17 @@ body::before {
   animation-fill-mode: backwards;
 }
 
-.feature-card:nth-child(1) { animation-delay: 0.1s; }
-.feature-card:nth-child(2) { animation-delay: 0.2s; }
-.feature-card:nth-child(3) { animation-delay: 0.3s; }
+.feature-card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.feature-card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.feature-card:nth-child(3) {
+  animation-delay: 0.3s;
+}
 
 /* =============================================================================
    Scrollbar

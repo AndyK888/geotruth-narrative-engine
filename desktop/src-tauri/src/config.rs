@@ -17,3 +17,8 @@ pub fn get_api_url() -> String {
 pub fn is_development() -> bool {
     cfg!(debug_assertions)
 }
+
+/// Get Gemini API Key
+pub fn get_gemini_api_key() -> String {
+    env::var("GEMINI_API_KEY").unwrap_or_default()
+}

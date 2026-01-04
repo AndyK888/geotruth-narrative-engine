@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { MapPacksModal } from './components/MapPacksModal';
 
 function App() {
     const [appVersion, setAppVersion] = useState<string>('');
     const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'checking'>(
         'checking'
     );
+    const [showMapPacks, setShowMapPacks] = useState(false);
+    const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
 
     useEffect(() => {
         // Get app version from Rust backend
@@ -15,6 +18,9 @@ function App() {
 
         // Check API connection status
         checkConnection();
+
+        // Check map packs status
+        checkMapPacksStatus();
     }, []);
 
     const checkConnection = async () => {
@@ -25,6 +31,20 @@ function App() {
         } catch {
             setConnectionStatus('offline');
         }
+    };
+
+    const checkMapPacksStatus = async () => {
+        try {
+            const regions = await invoke<{ downloaded: boolean }[]>('get_map_regions');
+            const downloaded = regions.filter(r => r.downloaded).length;
+            setMapPacksStatus({ downloaded, total: regions.length });
+        } catch {
+            // Commands not available yet
+        }
+    };
+
+    const handleMapPacksStatusChange = (downloaded: number, total: number) => {
+        setMapPacksStatus({ downloaded, total });
     };
 
     return (
@@ -101,9 +121,19 @@ function App() {
                             <span className="status-label">Processing</span>
                             <span className="status-value ready">Ready</span>
                         </div>
-                        <div className="status-item">
+                        <div
+                            className="status-item clickable"
+                            onClick={() => setShowMapPacks(true)}
+                            title="Click to manage map packs"
+                        >
                             <span className="status-label">Map Packs</span>
-                            <span className="status-value">Not Downloaded</span>
+                            <span className={`status-value ${mapPacksStatus.downloaded > 0 ? 'ready' : ''}`}>
+                                {mapPacksStatus.total === 0
+                                    ? 'Loading...'
+                                    : mapPacksStatus.downloaded === 0
+                                        ? 'Not Downloaded'
+                                        : `${mapPacksStatus.downloaded}/${mapPacksStatus.total} Downloaded`}
+                            </span>
                         </div>
                     </div>
                     <button className="retry-button" onClick={checkConnection}>
@@ -117,8 +147,15 @@ function App() {
                     <strong>Privacy First:</strong> All video processing happens locally on your machine.
                 </p>
             </footer>
+
+            <MapPacksModal
+                isOpen={showMapPacks}
+                onClose={() => setShowMapPacks(false)}
+                onStatusChange={handleMapPacksStatusChange}
+            />
         </div>
     );
 }
 
 export default App;
+

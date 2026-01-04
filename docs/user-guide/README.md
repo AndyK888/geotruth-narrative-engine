@@ -258,6 +258,20 @@ as a National Park in 1919, the canyon stretches...
 | **Auto-save** | Save projects automatically |
 | **Language** | Interface language |
 
+### Online vs. Offline Mode
+
+| Feature | Online Mode (Connected) | Offline Mode (Disconnected) |
+|---------|-------------------------|-----------------------------|
+| **Verification** | Gemini/Cloud API | Local PMTiles (Vector Map Packs) |
+| **Accuracy** | High (Full context) | Medium (Downloaded region data) |
+| **Narration** | Google Gemini 2.0 (Fast, Creative) | (Coming Soon: Local Llama) |
+| **Data Usage** | GPS Traces sent to API | 0 bytes sent |
+
+### Data Manager
+The app includes a **Data Manager** to download offline resources:
+- **Map Packs**: Download regions (e.g., "California", "France") for offline verification.
+- **AI Models**: Download smaller, local AI models for offline narration and event detection.
+
 ### API Settings
 
 For users who bring their own API keys:

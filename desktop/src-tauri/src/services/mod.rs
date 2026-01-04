@@ -11,7 +11,7 @@ pub mod truth_engine;
 pub mod data_manager;
 
 pub use ffmpeg::Ffmpeg;
-pub use whisper::Whisper;
+pub use whisper::{Whisper, Transcription, WhisperModel};
 pub use database::LocalDatabase;
 pub use gps::{parse_gps_file, GpsTrack, GpsPoint};
 pub use sync::TimeSyncEngine;

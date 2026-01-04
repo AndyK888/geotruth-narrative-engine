@@ -1,8 +1,8 @@
 /**
- * API Client for communicating with the GeoTruth backend
+ * API Client for communicating with the GeoTruth backend via Tauri
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { invoke } from '@tauri-apps/api/core';
 
 export interface HealthResponse {
     status: string;
@@ -56,55 +56,53 @@ export interface EnrichResponse {
 }
 
 class ApiClient {
-    private baseUrl: string;
+    // correlationId is kept for interface compatibility but not used in Tauri IPC
     private correlationId: string | null = null;
 
-    constructor(baseUrl: string = API_URL) {
-        this.baseUrl = baseUrl;
-    }
-
-    private async request<T>(
-        method: string,
-        path: string,
-        body?: unknown
-    ): Promise<T> {
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
-
-        if (this.correlationId) {
-            headers['X-Correlation-ID'] = this.correlationId;
-        }
-
-        const response = await fetch(`${this.baseUrl}${path}`, {
-            method,
-            headers,
-            body: body ? JSON.stringify(body) : undefined,
-        });
-
-        // Capture correlation ID from response
-        this.correlationId = response.headers.get('X-Correlation-ID');
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new Error(error.detail || `API error: ${response.status}`);
-        }
-
-        return response.json();
+    constructor() {
+        // No base URL needed for Tauri
     }
 
     async health(): Promise<HealthResponse> {
-        return this.request<HealthResponse>('GET', '/v1/health');
+        try {
+            const version = await invoke<string>('get_version');
+            // Check implicit health by version command success.
+            // We could also call check_api_connection if we maintained that concept,
+            // but in Monolith, if backend responds, it's healthy.
+
+            return {
+                status: 'ok',
+                version: version,
+                environment: 'production', // or check is_development
+                services: {
+                    database: 'duckdb', // Native
+                    redis: 'dashmap',   // Native
+                    valhalla: 'georust', // Native
+                }
+            };
+        } catch (e) {
+            console.error('Health check failed', e);
+            throw new Error(`Health check failed: ${e}`);
+        }
     }
 
     async enrich(request: EnrichRequest): Promise<EnrichResponse> {
-        return this.request<EnrichResponse>('POST', '/v1/enrich', request);
+        try {
+            return await invoke<EnrichResponse>('enrich', { request });
+        } catch (e) {
+            console.error('Enrichment failed', e);
+            throw e;
+        }
     }
 
     async enrichBatch(
         points: EnrichRequest[]
     ): Promise<{ results: EnrichResponse[] }> {
-        return this.request('POST', '/v1/enrich_batch', { points });
+        // Parallelize requests since we lack a batch command for now
+        const results = await Promise.all(
+            points.map(p => this.enrich(p))
+        );
+        return { results };
     }
 
     getCorrelationId(): string | null {

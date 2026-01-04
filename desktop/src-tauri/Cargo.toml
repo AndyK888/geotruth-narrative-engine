@@ -47,6 +47,20 @@ chrono = { version = "0.4", features = ["serde"] }
 # DuckDB for local storage
 duckdb = { version = "1.1", features = ["bundled"] }
 
+# Directories for platform-specific paths
+dirs = "5.0"
+
+# Lazy initialization
+once_cell = "1.19"
+
+# In-memory state
+dashmap = { version = "6.0", features = ["serde"] }
+
+# Geospatial
+geo = "0.28"
+geozero = "0.13"
+pmtiles = { version = "0.11", features = ["mmap-async-tokio", "tilejson"] } # Using pmtiles crate for reading vector tiles
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
