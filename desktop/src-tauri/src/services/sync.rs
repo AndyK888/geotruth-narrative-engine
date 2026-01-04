@@ -2,10 +2,10 @@
 //!
 //! Aligns video timestamps with GPS track data.
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::gps::{GpsPoint, GpsTrack};
 

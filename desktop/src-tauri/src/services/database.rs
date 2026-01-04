@@ -4,10 +4,10 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use duckdb::{Connection, Result as DuckResult, params};
+use duckdb::{Connection, params};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};

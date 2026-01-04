@@ -19,7 +19,6 @@ mod narrative;
 mod enrich;
 mod processor;
 
-use db::DbState;
 use state::AppState;
 use geo::GeoEngine;
 // use gemini::GeminiClient; // Removed unused
@@ -94,7 +93,7 @@ pub fn run() {
             // Initialize Database
             use services::database::LocalDatabase;
             let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
-            let db_path = app_data_dir.join("geotruth.duckdb");
+            let db_path = app_data_dir.join("geotruth_v1.duckdb");
             
             let db = LocalDatabase::open(db_path).expect("Failed to initialize database");
             

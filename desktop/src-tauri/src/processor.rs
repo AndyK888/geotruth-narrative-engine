@@ -1,5 +1,5 @@
 use crate::services::{Ffmpeg, Whisper, parse_gps_file, WhisperModel};
-use crate::types::{TruthBundle, TruthEvent, LocationResult, Coordinates};
+use crate::types::{TruthBundle, TruthEvent, LocationResult};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use std::path::PathBuf;
@@ -48,7 +48,7 @@ impl VideoProcessor {
         }
 
         // 4. Parse GPS
-        let gps_track = if let Some(path) = gps_path {
+        let _gps_track = if let Some(path) = gps_path {
             info!("Parsing GPS track: {:?}", path);
             Some(parse_gps_file(&path).await?)
         } else {

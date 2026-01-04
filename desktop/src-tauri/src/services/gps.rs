@@ -8,7 +8,7 @@ use std::io::{BufRead, BufReader};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc, TimeZone, NaiveDateTime};
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 #[derive(Error, Debug)]
 pub enum GpsError {

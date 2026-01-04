@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, info};
 use tokio::sync::RwLock;
 
 #[derive(Error, Debug)]

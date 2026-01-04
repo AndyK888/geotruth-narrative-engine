@@ -207,11 +207,11 @@ impl LocalTruthEngine {
     /// Query nearby POIs from local database
     async fn query_nearby_pois(
         &self,
-        lat: f64,
-        lon: f64,
-        radius_m: f64,
-        heading_deg: Option<f64>,
-        fov_deg: f64,
+        _lat: f64,
+        _lon: f64,
+        _radius_m: f64,
+        _heading_deg: Option<f64>,
+        _fov_deg: f64,
     ) -> Result<Vec<LocalPOI>, TruthEngineError> {
         // Placeholder - would query local SQLite/DuckDB POI database
         // with spatial index for efficient radius queries
@@ -237,7 +237,7 @@ impl LocalTruthEngine {
     }
     
     /// Estimate timezone from coordinates (simplified)
-    fn estimate_timezone(&self, lat: f64, lon: f64) -> Option<String> {
+    fn estimate_timezone(&self, _lat: f64, lon: f64) -> Option<String> {
         // Simplified timezone estimation based on longitude
         // Real implementation would use timezone boundary tiles
         
