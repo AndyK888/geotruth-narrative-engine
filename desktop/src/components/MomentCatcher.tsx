@@ -9,9 +9,10 @@ import { Camera, Sparkles, Terminal } from 'lucide-react';
 interface MomentCatcherProps {
     videoPath: string;
     onMomentCaptured?: (data: { timestamp: number; image: string; description?: string }) => void;
+    onAutoCaptured?: (moments: Array<{ timestamp: number; image: string; description?: string }>) => void;
 }
 
-export function MomentCatcher({ videoPath, onMomentCaptured }: MomentCatcherProps) {
+export function MomentCatcher({ videoPath, onMomentCaptured, onAutoCaptured }: MomentCatcherProps) {
     const playerRef = useRef<MediaPlayerInstance>(null);
     const [analyzing, setAnalyzing] = useState(false);
     const [lastCaptureTime, setLastCaptureTime] = useState<number | null>(null);
@@ -34,6 +35,7 @@ export function MomentCatcher({ videoPath, onMomentCaptured }: MomentCatcherProp
         const timestampMs = Math.floor(time * 1000);
 
         setAnalyzing(true);
+        log(`Capturing frame at ${time.toFixed(2)}s...`);
         try {
             // 1. Capture Frame (Rust)
             const base64Image = await invoke<string>('capture_frame', {
@@ -57,12 +59,41 @@ export function MomentCatcher({ videoPath, onMomentCaptured }: MomentCatcherProp
 
                 setLastCaptureTime(time);
                 setAnalyzing(false);
+                log('Moment captured successfully');
             }, 800);
 
         } catch (err) {
             console.error("Failed to capture moment:", err);
+            log(`Capture failed: ${err}`);
             setAnalyzing(false);
             // Could add toast here
+        }
+    };
+
+    const handleAutoAnalyze = async () => {
+        setAnalyzing(true);
+        log('Starting auto-analysis (scanning video)...');
+        try {
+            const scannedMoments = await invoke<Array<{ timestamp: number; image_path: string }>>('auto_scan_moments', {
+                videoPath
+            });
+
+            log(`Scanned ${scannedMoments.length} moments. converting...`);
+
+            // Convert paths to asset URLs or read them (frontend just needs URL)
+            const moments = scannedMoments.map(m => ({
+                timestamp: m.timestamp,
+                image: convertFileSrc(m.image_path), // Use asset protocol
+                description: `Auto-Scanned Scene at ${m.timestamp}s`
+            }));
+
+            onAutoCaptured?.(moments);
+            setAnalyzing(false);
+            log('Auto-analysis complete.');
+        } catch (err) {
+            console.error("Auto-scan failed:", err);
+            log(`Auto-scan failed: ${err}`);
+            setAnalyzing(false);
         }
     };
 
@@ -110,13 +141,20 @@ export function MomentCatcher({ videoPath, onMomentCaptured }: MomentCatcherProp
                 </div>
             </div>
 
-            {/* Previous gradient overlay... */}
-
             {/* Gradient Overlay for controls visibility */}
             <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-            {/* Floating Action Button */}
-            <div className="absolute bottom-8 right-8 z-10">
+            {/* Floating Action Buttons */}
+            <div className="absolute bottom-8 right-8 z-10 flex gap-4">
+                <button
+                    onClick={handleAutoAnalyze}
+                    disabled={analyzing}
+                    className="flex items-center gap-2 px-4 py-3 rounded-full font-bold shadow-xl bg-purple-600 text-white hover:bg-purple-500 hover:scale-105 transition-all text-sm"
+                >
+                    {analyzing ? <Sparkles size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    Auto-Analyze
+                </button>
+
                 <button
                     onClick={handleCapture}
                     disabled={analyzing}

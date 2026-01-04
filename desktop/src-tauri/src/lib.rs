@@ -88,6 +88,7 @@ pub fn run() {
             commands::enrich::enrich,
             commands::process::process_video,
             commands::video::capture_frame,
+            commands::video::auto_scan_moments,
         ])
         .setup(|app| {
             info!("Application setup complete");

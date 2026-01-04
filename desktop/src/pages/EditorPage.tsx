@@ -58,6 +58,26 @@ export function EditorPage({ videoPath, onBack }: EditorPageProps) {
         setEvents([...events, newEvent]);
     };
 
+    const handleAutoCaptured = (moments: Array<{ timestamp: number; image: string; description?: string }>) => {
+        const newMoments = moments.map(m => ({
+            id: Date.now().toString() + Math.random().toString().substr(2, 5),
+            timestamp: m.timestamp,
+            image: m.image,
+            description: m.description || "Auto-detected scene"
+        }));
+
+        const newEvents = moments.map((m, i) => ({
+            id: Date.now().toString() + i,
+            action: 'gps',
+            startTime: m.timestamp,
+            endTime: m.timestamp + 5,
+            text: m.description || 'Auto-detected scene'
+        }));
+
+        setCapturedMoments(prev => [...newMoments, ...prev]);
+        setEvents(prev => [...prev, ...newEvents]);
+    };
+
     const deleteMoment = (id: string) => {
         setCapturedMoments(moments => moments.filter(m => m.id !== id));
     };
@@ -150,6 +170,7 @@ export function EditorPage({ videoPath, onBack }: EditorPageProps) {
                                 <MomentCatcher
                                     videoPath={videoPath}
                                     onMomentCaptured={handleMomentCaptured}
+                                    onAutoCaptured={handleAutoCaptured}
                                 />
                             </div>
                         </div>
