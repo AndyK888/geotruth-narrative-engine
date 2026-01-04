@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use crate::services::{Ffmpeg, parse_gps_file, LocalDatabase, GpsTrack};
 
 /// Application state
+#[allow(dead_code)]
 pub struct AppState {
     pub db: Mutex<Option<LocalDatabase>>,
     pub ffmpeg: Mutex<Option<Ffmpeg>>,

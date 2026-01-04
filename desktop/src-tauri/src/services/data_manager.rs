@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Data Manager
 //!
 //! Manages data download, caching, and hybrid online/offline mode.

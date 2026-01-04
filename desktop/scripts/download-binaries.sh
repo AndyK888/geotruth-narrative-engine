@@ -52,7 +52,8 @@ download() {
     log_info "Downloading: $(basename "$output")"
     
     if command -v curl &> /dev/null; then
-        curl -L --progress-bar -o "$output" "$url"
+        # -f to fail on 404/server errors, -L to follow redirects
+        curl -Lf --progress-bar -o "$output" "$url"
     elif command -v wget &> /dev/null; then
         wget --show-progress -q -O "$output" "$url"
     else
@@ -66,19 +67,26 @@ download_ffmpeg() {
     local platform="$1"
     local target_dir="$2"
     
-    log_info "Downloading FFmpeg ${FFMPEG_VERSION} for ${platform}..."
+    log_info "Downloading FFmpeg for ${platform}..."
     
-    local url base_name
+    local url
     
     case "$platform" in
         macos-x86_64|macos-aarch64)
-            # Use static builds from evermeet.cx or GitHub releases
-            url="https://github.com/eugeneware/ffmpeg-static/releases/download/b${FFMPEG_VERSION}/ffmpeg-darwin-x64"
-            download "$url" "${target_dir}/ffmpeg"
+            # Use static builds from evermeet.cx (MacOS specific)
+            
+            # 1. FFmpeg
+            url="https://evermeet.cx/ffmpeg/ffmpeg-7.1.zip"
+            download "$url" "${target_dir}/ffmpeg.zip"
+            unzip -o -q "${target_dir}/ffmpeg.zip" -d "${target_dir}"
+            rm "${target_dir}/ffmpeg.zip"
             chmod +x "${target_dir}/ffmpeg"
             
-            url="https://github.com/eugeneware/ffmpeg-static/releases/download/b${FFMPEG_VERSION}/ffprobe-darwin-x64"
-            download "$url" "${target_dir}/ffprobe"
+            # 2. FFprobe
+            url="https://evermeet.cx/ffmpeg/ffprobe-7.1.zip"
+            download "$url" "${target_dir}/ffprobe.zip"
+            unzip -o -q "${target_dir}/ffprobe.zip" -d "${target_dir}"
+            rm "${target_dir}/ffprobe.zip"
             chmod +x "${target_dir}/ffprobe"
             ;;
         linux-x86_64)

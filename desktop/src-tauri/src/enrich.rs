@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 pub struct EnrichmentEngine {
     geo: Arc<GeoEngine>,
+    #[allow(dead_code)]
     state: Arc<AppState>,
     gemini: GeminiClient,
 }

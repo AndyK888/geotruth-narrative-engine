@@ -1,6 +1,5 @@
+#![allow(unused)]
 //! GPS Track Parser
-//!
-//! Parses GPX, NMEA, and other GPS file formats.
 
 use std::path::PathBuf;
 use std::fs::File;

@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Whisper.cpp Sidecar Interface
 //!
 //! Rust interface for executing Whisper.cpp for audio transcription.

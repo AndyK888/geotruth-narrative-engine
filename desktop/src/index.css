@@ -3,6 +3,8 @@
    Premium dark theme with glassmorphism and smooth animations
    ============================================================================= */
 
+@import "tailwindcss";
+
 /* CSS Variables - Design Tokens */
 :root {
   /* Colors - Premium Dark Theme */

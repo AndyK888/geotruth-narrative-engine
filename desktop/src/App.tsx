@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { MapPacksModal } from './components/MapPacksModal';
+import { EditorPage } from './pages/EditorPage';
 
 function App() {
     const [appVersion, setAppVersion] = useState<string>('');
@@ -10,6 +11,10 @@ function App() {
     );
     const [showMapPacks, setShowMapPacks] = useState(false);
     const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
+
+    // Navigation State
+    const [currentView, setCurrentView] = useState<'dashboard' | 'editor'>('dashboard');
+    const [activeVideoPath, setActiveVideoPath] = useState<string | null>(null);
 
     useEffect(() => {
         // Get app version from Rust backend
@@ -66,13 +71,27 @@ function App() {
                     videoPath,
                     gpsPath: null
                 });
-                alert(`Video imported successfully!\nPath: ${videoPath}`);
+                // alert(`Video imported successfully!\nPath: ${videoPath}`);
+                setActiveVideoPath(videoPath);
+                setCurrentView('editor');
             }
         } catch (e) {
             console.error('Import failed:', e);
             alert(`Import failed: ${e}`);
         }
     };
+
+    if (currentView === 'editor' && activeVideoPath) {
+        return (
+            <EditorPage
+                videoPath={activeVideoPath}
+                onBack={() => {
+                    setCurrentView('dashboard');
+                    setActiveVideoPath(null);
+                }}
+            />
+        );
+    }
 
     return (
         <div className="app">

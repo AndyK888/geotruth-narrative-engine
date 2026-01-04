@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::types::TruthBundle;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};

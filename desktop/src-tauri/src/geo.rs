@@ -11,6 +11,8 @@ macro_rules! wts {
     };
 }
 
+#[allow(dead_code)]
+#[allow(dead_code)]
 pub struct GeoEngine {
     // We might have multiple regions loaded
     readers: Arc<RwLock<Vec<AsyncPmTilesReader<pmtiles::MmapBackend>>>>,
@@ -24,6 +26,7 @@ impl GeoEngine {
     }
 
     /// Load a PMTiles file from disk
+    #[allow(dead_code)]
     pub async fn load_region<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let path = path.as_ref();
         if !path.exists() {

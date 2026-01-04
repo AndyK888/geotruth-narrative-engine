@@ -10,6 +10,7 @@ pub mod ingest;
 pub mod narrate;
 pub mod enrich;
 pub mod process;
+pub mod video;
 
 
 

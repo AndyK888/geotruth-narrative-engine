@@ -9,6 +9,14 @@
         "core:default",
         "shell:default",
         "shell:allow-open",
-        "dialog:default"
+        "dialog:default",
+        "fs:default",
+        {
+            "identifier": "fs:scope",
+            "allow": [
+                "$HOME/**",
+                "/Volumes/**"
+            ]
+        }
     ]
 }

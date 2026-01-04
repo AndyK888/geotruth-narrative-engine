@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! FFmpeg Sidecar Interface
 //!
 //! Rust interface for executing FFmpeg and FFprobe as sidecars.
@@ -70,6 +71,7 @@ struct FfprobeStream {
 }
 
 /// FFmpeg/FFprobe sidecar manager
+#[derive(Clone)]
 pub struct Ffmpeg {
     ffmpeg_path: PathBuf,
     ffprobe_path: PathBuf,
@@ -270,6 +272,49 @@ impl Ffmpeg {
         
         info!("Audio extracted to: {:?}", output_path);
         Ok(())
+    }
+
+    /// Capture a single frame at timestamp (ms) and return base64 string
+    pub async fn capture_frame(
+        &self,
+        video_path: &PathBuf,
+        timestamp_ms: u64,
+    ) -> Result<String, FfmpegError> {
+        if !self.ffmpeg_path.exists() {
+            return Err(FfmpegError::BinaryNotFound(self.ffmpeg_path.clone()));
+        }
+
+        let timestamp_seconds = timestamp_ms as f64 / 1000.0;
+        debug!("Capturing frame from: {:?} at {}s", video_path, timestamp_seconds);
+
+        // Usage: ffmpeg -ss <time> -i <input> -frames:v 1 -f image2 pipe:1
+        // Placing -ss before -i is faster (input seeking)
+        let output = Command::new(&self.ffmpeg_path)
+            .args(["-ss", &timestamp_seconds.to_string()])
+            .args(["-i"])
+            .arg(video_path)
+            .args([
+                "-frames:v", "1",
+                "-f", "image2", // Output format image
+                "-c:v", "mjpeg", // JPEG encoding
+                "-q:v", "2", // High quality
+                "pipe:1", // Output to stdout
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(FfmpegError::ExecutionFailed(stderr.to_string()));
+        }
+
+        use base64::{Engine as _, engine::general_purpose};
+        let b64 = general_purpose::STANDARD.encode(&output.stdout);
+        let data_uri = format!("data:image/jpeg;base64,{}", b64);
+
+        Ok(data_uri)
     }
 }
 

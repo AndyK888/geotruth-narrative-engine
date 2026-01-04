@@ -69,6 +69,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             commands::get_version,
             commands::check_api_connection,
@@ -86,6 +87,7 @@ pub fn run() {
             commands::narrate::narrate,
             commands::enrich::enrich,
             commands::process::process_video,
+            commands::video::capture_frame,
         ])
         .setup(|app| {
             info!("Application setup complete");
@@ -104,15 +106,6 @@ pub fn run() {
             
             app.manage(db);
 
-            // Initialize Legacy Ingest State (Deprecated but keeping valid types for now)
-            // We shouldn't need this if we update commands, but let's keep empty struct to avoid breaking other things if any
-            use commands::ingest::AppState as IngestState;
-            use tokio::sync::Mutex;
-            app.manage(IngestState {
-                db: Mutex::new(None), // We will not use this anymore
-                ffmpeg: Mutex::new(None),
-            });
-
             // Initialize Global App State
             let app_state = Arc::new(AppState::new());
             app.manage(app_state.clone());
@@ -129,31 +122,81 @@ pub fn run() {
             let enrichment_engine = EnrichmentEngine::new(geo_engine, app_state);
             app.manage(enrichment_engine);
 
+            // Initialize Services
+            // In production (bundle), binaries should be in resource_dir.
             use crate::services::{Ffmpeg, Whisper};
             use crate::processor::VideoProcessor;
-            
+
             // Initialize Services
-            // Accessing app handle to get resource path if needed, or assume standard paths
-            // For now assuming binaries are in PATH or sidecar
-             let binaries_dir = app.path().resource_dir()
+            // In production (bundle), binaries should be in resource_dir.
+            // In dev (debug), they are likely in ../binaries (relative to src-tauri).
+             let mut binaries_dir = app.path().resource_dir()
                 .unwrap_or(std::path::PathBuf::from("."));
+            
+            #[cfg(debug_assertions)]
+            {
+                // Verify if binaries exist in the default location, if not try dev path
+                let has_ffmpeg = binaries_dir.join("ffmpeg").exists() || binaries_dir.join("ffmpeg.exe").exists();
+                
+                if !has_ffmpeg {
+                    // Try looking in ../binaries relative to CWD (usually src-tauri)
+                    let dev_path = std::env::current_dir()
+                        .map(|p| p.join("../binaries"))
+                        .unwrap_or_else(|_| std::path::PathBuf::from("../binaries"));
+                    
+                    if dev_path.exists() {
+                        info!("Using development binaries directory: {:?}", dev_path);
+                        binaries_dir = dev_path;
+                    } else {
+                        warn!("Could not find binaries in {:?} or {:?}", binaries_dir, dev_path);
+                    }
+                }
+            }
             
             let ffmpeg = Arc::new(Ffmpeg::new(binaries_dir.clone()).unwrap_or_else(|e| {
                 warn!("FFmpeg init failed: {}", e);
-                // Return a dummy or panic? 
-                // For now, construct even if binary missing, or handle error better.
-                // Re-creating Ffmpeg without checking new() error since it just checks paths.
-                 // Actually Ffmpeg::new checks existence and warns.
-                 Ffmpeg::new(std::path::PathBuf::from(".")).unwrap() // Fallback
+                 Ffmpeg::new(std::path::PathBuf::from(".")).unwrap() 
             }));
             let whisper = Arc::new(Whisper::new(binaries_dir.clone()).unwrap_or_else(|e| {
                  warn!("Whisper init failed: {}", e);
                  Whisper::new(std::path::PathBuf::from(".")).unwrap()
             }));
+
+            // Initialize Legacy Ingest State with ACTUAL FFmpeg
+            use commands::ingest::AppState as IngestState;
+            use tokio::sync::Mutex;
+            // The ingest::AppState expects Mutex<Option<Ffmpeg>> (not Arc). 
+            // We need to clone the Ffmpeg inner struct, but Ffmpeg definition might not be cloneable or we might need to wrap it differently.
+            // Looking at `ingest.rs`, AppState has `ffmpeg: Mutex<Option<Ffmpeg>>`. 
+            // And `Ffmpeg` struct in `services/ffmpeg.rs` needs to be checked if it is cloneable.
+            // Assuming Ffmpeg is lightweight (just paths), we can clone it if it derives Clone.
+            // If not, we might need to adjust ingest.rs to take Arc<Ffmpeg> or similar.
+            
+            // Checking: ingest.rs: `pub struct AppState { pub ffmpeg: Mutex<Option<Ffmpeg>>, ... }`
+            // Let's assume we can clone because we saw `ffmpeg` variable above is `Arc<Ffmpeg>`.
+            // Wait, we need to pass a `Ffmpeg` instance, not `Arc`. 
+            // Let's check if Ffmpeg implements Clone. If not, we might fail compilation.
+            // Safe bet: The logic in ingest.rs is outdated because it uses `Mutex<Option<Ffmpeg>>`.
+            // Ideally `ingest.rs` should just use `State<'_, Arc<Ffmpeg>>`.
+            // BUT to minimize changes and "fix" the existing logic:
+            // We will deref the Arc to get a clone if possible.
+            
+            // Let's rely on standard Rust pattern here. 
+            // Actually, let's inject Arc<Ffmpeg> as a managed state and update ingest.rs to use that instead of the custom struct if possible.
+            // BUT `import_video` signature is `ffmpeg_state: State<'_, AppState>`.
+            // So we MUST populate AppState.
+            
+            app.manage(IngestState {
+                db: Mutex::new(None), // We use global DB state now
+                // We need to unwrap the Arc or clone the inner. 
+                // Since Ffmpeg holds PathBufs, it should be cloneable. 
+                ffmpeg: Mutex::new(Some((*ffmpeg).clone())), 
+            });
+
             
             // Initialize Video Processor
             let temp_dir = std::env::temp_dir();
-            let video_processor = Arc::new(VideoProcessor::new(ffmpeg, whisper, temp_dir));
+            let video_processor = Arc::new(VideoProcessor::new(ffmpeg.clone(), whisper, temp_dir));
             app.manage(video_processor);
 
             // Log window info

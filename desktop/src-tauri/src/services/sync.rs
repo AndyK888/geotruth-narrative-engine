@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Time Synchronization Engine
 //!
 //! Aligns video timestamps with GPS track data.

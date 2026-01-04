@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! DuckDB Local Database
 //!
 //! Embedded database for local project storage in the desktop app.
@@ -188,6 +189,11 @@ impl LocalDatabase {
             CREATE INDEX IF NOT EXISTS idx_events_video ON events(video_id);
             CREATE INDEX IF NOT EXISTS idx_events_time ON events(start_time_seconds);
             CREATE INDEX IF NOT EXISTS idx_transcriptions_video ON transcriptions(video_id);
+
+            -- Ensure default project exists
+            INSERT INTO projects (id, name, description) 
+            VALUES ('default', 'Default Project', 'Default workspace') 
+            ON CONFLICT (id) DO NOTHING;
         "#)?;
         
         info!("Database schema initialized");
