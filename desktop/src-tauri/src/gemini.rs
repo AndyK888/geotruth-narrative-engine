@@ -18,7 +18,7 @@ impl GeminiClient {
         Self {
             client: Client::new(),
             api_key,
-            model: "gemini-2.0-flash".to_string(),
+            model: "gemini-3.0-flash".to_string(),
         }
     }
 

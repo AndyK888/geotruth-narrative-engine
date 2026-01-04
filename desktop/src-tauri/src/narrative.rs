@@ -59,7 +59,7 @@ impl NarrativeEngine {
             .context("Failed to map JSON to output structure")?;
 
         let mut meta = HashMap::new();
-        meta.insert("engine".to_string(), "gemini-2.0-flash".to_string());
+        meta.insert("engine".to_string(), "gemini-3.0-flash".to_string());
 
         Ok(NarrateResponse {
             chapters: output.chapters,
