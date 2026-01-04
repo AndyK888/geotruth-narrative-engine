@@ -1,6 +1,6 @@
 use crate::services::Ffmpeg;
 use std::path::PathBuf;
-use tauri::State;
+use tauri::{State, Manager}; // Import Manager
 use std::sync::Arc;
 
 /// Capture a frame from a video at the specified timestamp in milliseconds.
@@ -43,7 +43,7 @@ pub async fn auto_scan_moments(
 
     // Create a unique directory for this scan in temp or app_cache
     let file_stem = video_path.file_stem().unwrap_or_default().to_string_lossy();
-    let cache_dir = app_handle.path().app_cache_dir().map_err(|e| e.to_string())?;
+    let cache_dir = app_handle.path().app_cache_dir().map_err(|e: tauri::Error| e.to_string())?;
     let output_dir = cache_dir.join("moments").join(&*file_stem);
     
     if !output_dir.exists() {
