@@ -176,12 +176,63 @@ static AVAILABLE_REGIONS: Lazy<Vec<RegionInfo>> = Lazy::new(|| {
 
 /// Global map regions state (User added regions)
 static MAP_REGIONS: Lazy<Arc<RwLock<Vec<RegionInfo>>>> = Lazy::new(|| {
-    Arc::new(RwLock::new(vec![
-        // Defaults
-        AVAILABLE_REGIONS.iter().find(|r| r.id == "europe/monaco").unwrap().clone(),
-        AVAILABLE_REGIONS.iter().find(|r| r.id == "us/california").unwrap().clone(),
-    ]))
+    let regions = load_regions_from_disk().unwrap_or_else(|| {
+        vec![
+            // Defaults if no file exists
+            AVAILABLE_REGIONS.iter().find(|r| r.id == "europe/monaco").unwrap().clone(),
+            AVAILABLE_REGIONS.iter().find(|r| r.id == "us/california").unwrap().clone(),
+        ]
+    });
+    Arc::new(RwLock::new(regions))
 });
+
+/// Helper to get persistence file path
+fn get_regions_file_path() -> std::path::PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("com.geotruth.app")
+        .join("regions.json")
+}
+
+/// Helper to save regions to disk
+fn save_regions_to_disk(regions: &Vec<RegionInfo>) {
+    let path = get_regions_file_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    
+    if let Ok(json) = serde_json::to_string_pretty(regions) {
+        if let Err(e) = std::fs::write(&path, json) {
+            warn!("Failed to save regions: {}", e);
+        } else {
+            info!("Saved regions to {:?}", path);
+        }
+    }
+}
+
+/// Helper to load regions from disk
+fn load_regions_from_disk() -> Option<Vec<RegionInfo>> {
+    let path = get_regions_file_path();
+    if !path.exists() {
+        return None;
+    }
+    
+    match std::fs::read_to_string(&path) {
+        Ok(json) => {
+            match serde_json::from_str(&json) {
+                Ok(regions) => Some(regions),
+                Err(e) => {
+                    warn!("Failed to parse regions file: {}", e);
+                    None
+                }
+            }
+        },
+        Err(e) => {
+            warn!("Failed to read regions file: {}", e);
+            None
+        }
+    }
+}
 
 /// Global download progress state
 static DOWNLOAD_PROGRESS: Lazy<Arc<RwLock<Option<DownloadProgress>>>> = Lazy::new(|| {
@@ -207,7 +258,8 @@ pub async fn add_region(region_id: String) -> Result<(), String> {
     // Find in catalog
     if let Some(region) = AVAILABLE_REGIONS.iter().find(|r| r.id == region_id) {
         regions.push(region.clone());
-        // TODO: Save to persistence file here
+        // Save using current list
+        save_regions_to_disk(&regions);
         Ok(())
     } else {
         Err(format!("Region not found in catalog: {}", region_id))
@@ -328,7 +380,7 @@ pub async fn download_map_region(region_id: String) -> Result<(), String> {
         }
     }
     
-    info!("Download complete: {:?} ({} bytes)", file_path, bytes.len());
+    info!("Download complete: {:?} ({} bytes)", file_path, downloaded);
     
     // Clear progress
     {

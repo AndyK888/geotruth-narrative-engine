@@ -216,12 +216,22 @@ export function MapPacksModal({ isOpen, onClose, onStatusChange }: MapPacksModal
                                             </div>
                                         </div>
                                     ) : region.downloaded ? (
-                                        <button
-                                            className="delete-button"
-                                            onClick={() => handleDelete(region.id)}
-                                        >
-                                            🗑️ Delete
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button
+                                                className="download-button"
+                                                onClick={() => handleDownload(region.id)}
+                                                style={{ padding: '8px 12px', fontSize: '0.8rem', background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                                            >
+                                                ↻ Update
+                                            </button>
+                                            <button
+                                                className="delete-button"
+                                                onClick={() => handleDelete(region.id)}
+                                                style={{ padding: '8px 12px', fontSize: '0.8rem' }}
+                                            >
+                                                🗑️ Delete
+                                            </button>
+                                        </div>
                                     ) : (
                                         <button
                                             className="download-button"
