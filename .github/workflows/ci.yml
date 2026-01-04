@@ -49,7 +49,7 @@ jobs:
     needs: backend-lint
     services:
       postgres:
-        image: postgis/postgis:17-3.5-alpine
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: geotruth
           POSTGRES_PASSWORD: testpassword
@@ -136,8 +136,6 @@ jobs:
       
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
