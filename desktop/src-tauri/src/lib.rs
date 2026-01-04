@@ -163,6 +163,10 @@ pub fn run() {
                  Whisper::new(std::path::PathBuf::from(".")).unwrap()
             }));
 
+            // Register Services as Managed State
+            app.manage(ffmpeg.clone());
+            app.manage(whisper.clone());
+
             // Initialize Legacy Ingest State with ACTUAL FFmpeg
             use commands::ingest::AppState as IngestState;
             use tokio::sync::Mutex;
