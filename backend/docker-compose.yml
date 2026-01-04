@@ -13,7 +13,6 @@ services:
       dockerfile: Dockerfile
       args:
         PYTHON_VERSION: "3.12"
-    image: geotruth/api:latest
     container_name: geotruth-api
     restart: unless-stopped
     ports:
