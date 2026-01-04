@@ -5,7 +5,6 @@ Generates fact-checked narration using Gemini (online) or Llama (offline).
 """
 
 import logging
-from typing import Optional
 import json
 
 from fastapi import APIRouter, HTTPException
@@ -16,7 +15,6 @@ from ..models import (
     NarrateRequest,
     NarrateResponse,
     Chapter,
-    ScriptSegment,
 )
 
 router = APIRouter()
