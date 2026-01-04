@@ -1,5 +1,3 @@
-version: '3.9'
-
 # =============================================================================
 # GeoTruth Backend Services - Development Configuration
 # Extends docker-compose.yml with development overrides
