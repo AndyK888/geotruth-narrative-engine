@@ -122,6 +122,8 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Validate docker-compose
+        env:
+          POSTGRES_PASSWORD: ci_test_password
         run: |
           cd backend
           docker compose config > /dev/null
