@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { MapPacksModal } from './components/MapPacksModal';
+import { ImportProgressModal } from './components/ImportProgressModal';
 import { EditorPage } from './pages/EditorPage';
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
     );
     const [showMapPacks, setShowMapPacks] = useState(false);
     const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
+    const [isImporting, setIsImporting] = useState(false);
 
     // Navigation State
     const [currentView, setCurrentView] = useState<'dashboard' | 'editor'>('dashboard');
@@ -65,19 +67,28 @@ function App() {
 
             if (selected) {
                 const videoPath = selected as string;
-                // Import to default project "default"
+                setIsImporting(true);
+
+                // Import to default project (auto-creates if needed)
                 await invoke('import_video', {
                     projectId: 'default',
                     videoPath,
                     gpsPath: null
                 });
-                // alert(`Video imported successfully!\nPath: ${videoPath}`);
+
                 setActiveVideoPath(videoPath);
-                setCurrentView('editor');
             }
         } catch (e) {
             console.error('Import failed:', e);
             alert(`Import failed: ${e}`);
+            setIsImporting(false);
+        }
+    };
+
+    const handleImportComplete = () => {
+        setIsImporting(false);
+        if (activeVideoPath) {
+            setCurrentView('editor');
         }
     };
 
@@ -198,6 +209,11 @@ function App() {
                 isOpen={showMapPacks}
                 onClose={() => setShowMapPacks(false)}
                 onStatusChange={handleMapPacksStatusChange}
+            />
+
+            <ImportProgressModal
+                isOpen={isImporting}
+                onComplete={handleImportComplete}
             />
         </div>
     );

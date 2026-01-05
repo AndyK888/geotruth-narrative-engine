@@ -290,20 +290,6 @@ impl Ffmpeg {
         Ok(moments)
     }
 
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VideoMoment {
-    pub path: PathBuf,
-    pub timestamp: f64,
-}
-
-#[derive(Debug)]
-enum FilterMode {
-    Interval(f64),
-    Scene(f32),
-
-    
     /// Extract audio from video as WAV (for Whisper)
     pub async fn extract_audio(
         &self,
@@ -383,6 +369,18 @@ enum FilterMode {
 
         Ok(data_uri)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoMoment {
+    pub path: PathBuf,
+    pub timestamp: f64,
+}
+
+#[derive(Debug)]
+enum FilterMode {
+    Interval(f64),
+    Scene(f32),
 }
 
 #[cfg(test)]

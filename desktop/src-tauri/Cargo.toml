@@ -1,6 +1,6 @@
 [package]
 name = "geotruth-desktop"
-version = "0.1.1"
+version = "0.1.2"
 description = "GeoTruth Narrative Engine - Desktop Application"
 authors = ["GeoTruth Team"]
 license = "MIT"
@@ -17,7 +17,7 @@ tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
 # Tauri Core
-tauri = { version = "2.1", features = ["devtools"] }
+tauri = { version = "2.1", features = ["protocol-asset", "devtools"] }
 tauri-plugin-shell = "2.0"
 tauri-plugin-dialog = "2.0"
 tauri-plugin-fs = "2.0"

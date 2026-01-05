@@ -171,12 +171,13 @@ export function EditorPage({ videoPath, onBack }: EditorPageProps) {
                                     videoPath={videoPath}
                                     onMomentCaptured={handleMomentCaptured}
                                     onAutoCaptured={handleAutoCaptured}
+                                    moments={capturedMoments}
                                 />
                             </div>
                         </div>
 
                         {/* Right Panel: Captured Moments Stream */}
-                        <div className="col-span-4 flex flex-col gap-4">
+                        <div className="col-span-4 flex flex-col gap-4 min-w-0">
                             <div className="flex items-center justify-between px-2">
                                 <h3 className="font-bold text-[var(--color-text-primary)] flex items-center gap-2">
                                     <Clock size={16} className="text-[var(--color-accent-secondary)]" />
@@ -187,12 +188,12 @@ export function EditorPage({ videoPath, onBack }: EditorPageProps) {
                                 </span>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 space-y-3 custom-scrollbar">
                                 {capturedMoments.length === 0 ? (
                                     <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-[var(--color-border)] rounded-xl text-[var(--color-text-muted)]">
                                         <Camera size={24} className="mb-2 opacity-50" />
                                         <p className="text-sm">No moments captured yet.</p>
-                                        <p className="text-xs opacity-50 mt-1">Press 'C' or click Analyze</p>
+                                        <p className="text-xs opacity-50 mt-1">Press 'C' or click Capture</p>
                                     </div>
                                 ) : (
                                     capturedMoments.map((moment) => (
@@ -204,20 +205,20 @@ export function EditorPage({ videoPath, onBack }: EditorPageProps) {
                                                         {formatTime(moment.timestamp)}
                                                     </span>
                                                 </div>
-                                                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                                                <div className="flex-1 min-w-0 flex flex-col justify-between overflow-hidden">
                                                     <div>
-                                                        <p className="text-sm text-[var(--color-text-primary)] line-clamp-2 leading-tight">
+                                                        <p className="text-sm text-[var(--color-text-primary)] line-clamp-2 leading-tight break-words">
                                                             {moment.description}
                                                         </p>
                                                     </div>
                                                     <div className="flex justify-between items-center mt-2">
                                                         <div className="flex items-center gap-1">
-                                                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                                            <span className="text-[10px] text-[var(--color-text-secondary)]">GPS Locked</span>
+                                                            <div className="w-2 h-2 rounded-full bg-green-500 shrink-0"></div>
+                                                            <span className="text-[10px] text-[var(--color-text-secondary)] whitespace-nowrap">GPS Locked</span>
                                                         </div>
                                                         <button
                                                             onClick={() => deleteMoment(moment.id)}
-                                                            className="text-[var(--color-text-muted)] hover:text-red-400 p-1 rounded-md hover:bg-[var(--color-bg-tertiary)] transition-colors"
+                                                            className="text-[var(--color-text-muted)] hover:text-red-400 p-1 rounded-md hover:bg-[var(--color-bg-tertiary)] transition-colors shrink-0"
                                                             title="Delete Moment"
                                                         >
                                                             <Trash2 size={12} />
@@ -240,7 +241,10 @@ export function EditorPage({ videoPath, onBack }: EditorPageProps) {
                             <div className="w-2/3 bg-black rounded-xl overflow-hidden border border-[var(--color-border)] shadow-xl relative">
                                 {/* Context Video Player */}
                                 {/* Reusing MomentCatcher as the player for now, but disabling capture controls via props if we updated it */}
-                                <MomentCatcher videoPath={videoPath} />
+                                <MomentCatcher
+                                    videoPath={videoPath}
+                                    moments={capturedMoments}
+                                />
                             </div>
                             <div className="w-1/3 flex flex-col gap-4 overflow-y-auto pr-2">
                                 <h3 className="font-bold text-[var(--color-text-secondary)] text-xs uppercase tracking-wider mb-2">Narrative Blocks</h3>

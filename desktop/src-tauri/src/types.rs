@@ -124,7 +124,7 @@ pub struct TruthBundle {
 // =============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct NarrateRequest {
     pub truth_bundle: TruthBundle,
     #[serde(skip_serializing_if = "Option::is_none")]

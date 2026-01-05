@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{State, AppHandle, Emitter};
 use tracing::{info, debug, error};
 use tokio::sync::Mutex;
 
@@ -17,10 +17,19 @@ pub struct AppState {
     pub ffmpeg: Mutex<Option<Ffmpeg>>,
 }
 
+/// Import progress event payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportProgress {
+    pub stage: String,
+    pub progress: u8,
+    pub message: String,
+}
+
 /// Video import result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportResult {
     pub video_id: String,
+    pub project_id: String,
     pub filename: String,
     pub duration_seconds: Option<f64>,
     pub fps: Option<f64>,
@@ -40,27 +49,41 @@ pub struct GpsTrackSummary {
 /// Import a video file with optional GPS track
 #[tauri::command]
 pub async fn import_video(
-    db: State<'_, LocalDatabase>, // Injected directly
-    ffmpeg_state: State<'_, AppState>, // Keeping for ffmpeg access
+    app: AppHandle,
+    db: State<'_, LocalDatabase>,
+    ffmpeg_state: State<'_, AppState>,
     project_id: String,
     video_path: String,
     gps_path: Option<String>,
 ) -> Result<ImportResult, String> {
     info!("Importing video: {} to project {}", video_path, project_id);
     
-    let video_path = PathBuf::from(&video_path);
+    let video_path_buf = PathBuf::from(&video_path);
     
     // Check file exists
-    if !video_path.exists() {
-        return Err(format!("Video file not found: {:?}", video_path));
+    if !video_path_buf.exists() {
+        return Err(format!("Video file not found: {:?}", video_path_buf));
     }
     
-    // Extract metadata with FFmpeg
+    // Emit: Starting
+    let _ = app.emit("import-progress", ImportProgress {
+        stage: "start".into(),
+        progress: 0,
+        message: "Starting import...".into(),
+    });
+    
+    // Emit: Extracting metadata
+    let _ = app.emit("import-progress", ImportProgress {
+        stage: "metadata".into(),
+        progress: 20,
+        message: "Extracting video metadata...".into(),
+    });
+    
     // Extract metadata with FFmpeg
     let metadata = {
         let ffmpeg_guard = ffmpeg_state.ffmpeg.lock().await;
         if let Some(ref ffmpeg) = *ffmpeg_guard {
-            match ffmpeg.extract_metadata(&video_path).await {
+            match ffmpeg.extract_metadata(&video_path_buf).await {
                 Ok(m) => Some(m),
                 Err(e) => {
                     error!("Failed to extract metadata: {}", e);
@@ -68,12 +91,17 @@ pub async fn import_video(
                 }
             }
         } else {
-            // Try to initialize FFmpeg on fly if missing? Or just error?
-            // For now, warn and skip metadata
-             error!("FFmpeg not initialized in state");
+            error!("FFmpeg not initialized in state");
             None
         }
     };
+    
+    // Emit: GPS parsing
+    let _ = app.emit("import-progress", ImportProgress {
+        stage: "gps".into(),
+        progress: 50,
+        message: "Parsing GPS data...".into(),
+    });
     
     // Parse GPS track if provided
     let gps_track = if let Some(gps_path_str) = gps_path {
@@ -102,9 +130,16 @@ pub async fn import_video(
         None
     };
     
+    // Emit: Database
+    let _ = app.emit("import-progress", ImportProgress {
+        stage: "database".into(),
+        progress: 80,
+        message: "Saving to database...".into(),
+    });
+    
     // Store in database
     let video_id = {
-        let filename = video_path.file_name()
+        let filename = video_path_buf.file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         
@@ -122,7 +157,7 @@ pub async fn import_video(
         match db.add_video(
             &project_id,
             &filename,
-            &video_path.to_string_lossy(),
+            &video_path_buf.to_string_lossy(),
             video_metadata,
         ).await {
             Ok(video) => video.id,
@@ -138,11 +173,19 @@ pub async fn import_video(
             }
         });
     
+    // Emit: Complete
+    let _ = app.emit("import-progress", ImportProgress {
+        stage: "complete".into(),
+        progress: 100,
+        message: "Import complete!".into(),
+    });
+    
     info!("Video imported successfully: {}", video_id);
     
     Ok(ImportResult {
         video_id,
-        filename: video_path.file_name()
+        project_id: project_id.clone(),
+        filename: video_path_buf.file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default(),
         duration_seconds: metadata.as_ref().and_then(|m| m.duration_seconds),
