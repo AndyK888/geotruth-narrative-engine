@@ -67,28 +67,38 @@ function App() {
 
             if (selected) {
                 const videoPath = selected as string;
+                console.log('🎬 Starting import for:', videoPath);
                 setIsImporting(true);
 
                 // Import to default project (auto-creates if needed)
-                await invoke('import_video', {
+                const result = await invoke('import_video', {
                     projectId: 'default',
                     videoPath,
                     gpsPath: null
                 });
 
+                console.log('✅ Import successful:', result);
+                // Set active video path after successful import
                 setActiveVideoPath(videoPath);
             }
         } catch (e) {
-            console.error('Import failed:', e);
+            console.error('❌ Import failed:', e);
             alert(`Import failed: ${e}`);
             setIsImporting(false);
         }
     };
 
     const handleImportComplete = () => {
+        console.log('📝 Import complete callback triggered');
+        console.log('📹 Active video path:', activeVideoPath);
+
         setIsImporting(false);
+
         if (activeVideoPath) {
+            console.log('🎥 Navigating to editor for:', activeVideoPath);
             setCurrentView('editor');
+        } else {
+            console.warn('⚠️ Import complete but no active video path set');
         }
     };
 
