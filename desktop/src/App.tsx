@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { MapPacksModal } from './components/MapPacksModal';
 import { ImportProgressModal } from './components/ImportProgressModal';
+import { ProjectList, type Project } from './components/ProjectList';
+import { CreateProjectModal } from './components/CreateProjectModal';
 import { EditorPage } from './pages/EditorPage';
 
 function App() {
@@ -12,7 +14,12 @@ function App() {
     );
     const [showMapPacks, setShowMapPacks] = useState(false);
     const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
+    const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
     const [isImporting, setIsImporting] = useState(false);
+
+    // Projects State
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [showCreateProject, setShowCreateProject] = useState(false);
 
     // Navigation State
     const [currentView, setCurrentView] = useState<'dashboard' | 'editor'>('dashboard');
@@ -29,6 +36,9 @@ function App() {
 
         // Check map packs status
         checkMapPacksStatus();
+
+        // Fetch projects
+        fetchProjects();
     }, []);
 
     const checkConnection = async () => {
@@ -53,6 +63,26 @@ function App() {
 
     const handleMapPacksStatusChange = (downloaded: number, total: number) => {
         setMapPacksStatus({ downloaded, total });
+    };
+
+    const fetchProjects = async () => {
+        try {
+            const result = await invoke<Project[]>('get_projects');
+            setProjects(result);
+        } catch (e) {
+            console.error('Failed to fetch projects:', e);
+        }
+    };
+
+    const handleCreateProject = async (name: string, description: string) => {
+        try {
+            await invoke('create_project', { name, description: description || null });
+            await fetchProjects(); // Refresh list
+            setShowCreateProject(false);
+        } catch (e) {
+            console.error('Failed to create project:', e);
+            throw e; // Re-throw to be handled by modal
+        }
     };
 
     const handleImportVideo = async () => {
@@ -169,6 +199,17 @@ function App() {
                             <span className="coming-soon">Coming Soon</span>
                         </button>
                     </div> */}
+
+                    <div className="mt-12">
+                        <ProjectList
+                            projects={projects}
+                            onCreateProject={() => setShowCreateProject(true)}
+                            onSelectProject={(p) => {
+                                console.log('Selected project:', p);
+                                // Future: filter dashboard by project or open project view
+                            }}
+                        />
+                    </div>
                 </section>
 
                 <section className="status-section">
@@ -224,6 +265,12 @@ function App() {
             <ImportProgressModal
                 isOpen={isImporting}
                 onComplete={handleImportComplete}
+            />
+
+            <CreateProjectModal
+                isOpen={showCreateProject}
+                onClose={() => setShowCreateProject(false)}
+                onSubmit={handleCreateProject}
             />
         </div>
     );
