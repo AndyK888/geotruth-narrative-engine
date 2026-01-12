@@ -14,7 +14,7 @@ function App() {
     );
     const [showMapPacks, setShowMapPacks] = useState(false);
     const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
-    const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
+
     const [isImporting, setIsImporting] = useState(false);
 
     // Projects State
