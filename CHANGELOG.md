@@ -35,7 +35,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.0] - TBD
+## [0.1.5] - 2026-01-21
+
+### Changed - UI/UX Modernization ✨
+
+**Design System**
+- Added Google Fonts (Poppins for headings, Open Sans for body text)
+- Updated color palette to media/video production standards
+- Enhanced glassmorphism effects with better contrast
+- Improved focus states for keyboard navigation (WCAG AA compliance)
+- Added reduced motion support for accessibility
+
+**Icons**
+- Replaced all emoji icons with professional Lucide SVG icons
+- Added smooth icon animations on hover
+- Improved visual consistency across the application
+
+**Components**
+- **App.tsx**: Enhanced main dashboard with SVG icons, improved status indicators
+- **MapPacksModal**: Major refactoring - replaced emojis with SVG icons, consolidated CSS
+- **ProjectList**: Added cursor-pointer to project cards for better UX
+- **All Modals**: Improved backdrop blur and visual hierarchy
+
+**Styling**
+- Consolidated all modal styles into main design system (`index.css`)
+- Removed separate `MapPacksModal.css` file
+- Enhanced button hover states without layout shift
+- Improved color contrast ratios for better readability
+
+### Removed
+- `desktop/src/components/MapPacksModal.css` (consolidated into main CSS)
+
+### Technical
+- Version bump: 0.1.4 → 0.1.5
+- Code formatted with Prettier
+- Build tested and verified
+
+---
+
+## [0.1.4] - 2026-01-21
 
 ### Added
 - Project initialization

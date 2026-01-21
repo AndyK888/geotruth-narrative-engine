@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { Video, Search, Bot, Globe, WifiOff, Loader2, RefreshCw } from 'lucide-react';
 import { MapPacksModal } from './components/MapPacksModal';
 import { ImportProgressModal } from './components/ImportProgressModal';
 import { ProjectList, type Project } from './components/ProjectList';
@@ -8,186 +9,200 @@ import { CreateProjectModal } from './components/CreateProjectModal';
 import { EditorPage } from './pages/EditorPage';
 
 function App() {
-    const [appVersion, setAppVersion] = useState<string>('');
-    const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'checking'>(
-        'checking'
-    );
-    const [showMapPacks, setShowMapPacks] = useState(false);
-    const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
+  const [appVersion, setAppVersion] = useState<string>('');
+  const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'checking'>(
+    'checking'
+  );
+  const [showMapPacks, setShowMapPacks] = useState(false);
+  const [mapPacksStatus, setMapPacksStatus] = useState({ downloaded: 0, total: 0 });
 
-    const [isImporting, setIsImporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
-    // Projects State
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [showCreateProject, setShowCreateProject] = useState(false);
+  // Projects State
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [showCreateProject, setShowCreateProject] = useState(false);
 
-    // Navigation State
-    const [currentView, setCurrentView] = useState<'dashboard' | 'editor'>('dashboard');
-    const [activeVideoPath, setActiveVideoPath] = useState<string | null>(null);
+  // Navigation State
+  const [currentView, setCurrentView] = useState<'dashboard' | 'editor'>('dashboard');
+  const [activeVideoPath, setActiveVideoPath] = useState<string | null>(null);
 
-    useEffect(() => {
-        // Get app version from Rust backend
-        invoke<string>('get_version')
-            .then((version) => setAppVersion(version))
-            .catch(console.error);
+  useEffect(() => {
+    // Get app version from Rust backend
+    invoke<string>('get_version')
+      .then((version) => setAppVersion(version))
+      .catch(console.error);
 
-        // Check API connection status
-        checkConnection();
+    // Check API connection status
+    checkConnection();
 
-        // Check map packs status
-        checkMapPacksStatus();
+    // Check map packs status
+    checkMapPacksStatus();
 
-        // Fetch projects
-        fetchProjects();
-    }, []);
+    // Fetch projects
+    fetchProjects();
+  }, []);
 
-    const checkConnection = async () => {
-        setConnectionStatus('checking');
-        try {
-            const isOnline = await invoke<boolean>('check_api_connection');
-            setConnectionStatus(isOnline ? 'online' : 'offline');
-        } catch {
-            setConnectionStatus('offline');
-        }
-    };
-
-    const checkMapPacksStatus = async () => {
-        try {
-            const regions = await invoke<{ downloaded: boolean }[]>('get_map_regions');
-            const downloaded = regions.filter(r => r.downloaded).length;
-            setMapPacksStatus({ downloaded, total: regions.length });
-        } catch {
-            // Commands not available yet
-        }
-    };
-
-    const handleMapPacksStatusChange = (downloaded: number, total: number) => {
-        setMapPacksStatus({ downloaded, total });
-    };
-
-    const fetchProjects = async () => {
-        try {
-            const result = await invoke<Project[]>('get_projects');
-            setProjects(result);
-        } catch (e) {
-            console.error('Failed to fetch projects:', e);
-        }
-    };
-
-    const handleCreateProject = async (name: string, description: string) => {
-        try {
-            await invoke('create_project', { name, description: description || null });
-            await fetchProjects(); // Refresh list
-            setShowCreateProject(false);
-        } catch (e) {
-            console.error('Failed to create project:', e);
-            throw e; // Re-throw to be handled by modal
-        }
-    };
-
-    const handleImportVideo = async () => {
-        try {
-            const selected = await open({
-                multiple: false,
-                filters: [{
-                    name: 'Video',
-                    extensions: ['mp4', 'mov', 'avi', 'mkv']
-                }]
-            });
-
-            if (selected) {
-                const videoPath = selected as string;
-                console.log('🎬 Starting import for:', videoPath);
-                setIsImporting(true);
-
-                // Import to default project (auto-creates if needed)
-                const result = await invoke('import_video', {
-                    projectId: 'default',
-                    videoPath,
-                    gpsPath: null
-                });
-
-                console.log('✅ Import successful:', result);
-                // Set active video path after successful import
-                setActiveVideoPath(videoPath);
-            }
-        } catch (e) {
-            console.error('❌ Import failed:', e);
-            alert(`Import failed: ${e}`);
-            setIsImporting(false);
-        }
-    };
-
-    const handleImportComplete = () => {
-        console.log('📝 Import complete callback triggered');
-        console.log('📹 Active video path:', activeVideoPath);
-
-        setIsImporting(false);
-
-        if (activeVideoPath) {
-            console.log('🎥 Navigating to editor for:', activeVideoPath);
-            setCurrentView('editor');
-        } else {
-            console.warn('⚠️ Import complete but no active video path set');
-        }
-    };
-
-    if (currentView === 'editor' && activeVideoPath) {
-        return (
-            <EditorPage
-                videoPath={activeVideoPath}
-                onBack={() => {
-                    setCurrentView('dashboard');
-                    setActiveVideoPath(null);
-                }}
-            />
-        );
+  const checkConnection = async () => {
+    setConnectionStatus('checking');
+    try {
+      const isOnline = await invoke<boolean>('check_api_connection');
+      setConnectionStatus(isOnline ? 'online' : 'offline');
+    } catch {
+      setConnectionStatus('offline');
     }
+  };
 
+  const checkMapPacksStatus = async () => {
+    try {
+      const regions = await invoke<{ downloaded: boolean }[]>('get_map_regions');
+      const downloaded = regions.filter((r) => r.downloaded).length;
+      setMapPacksStatus({ downloaded, total: regions.length });
+    } catch {
+      // Commands not available yet
+    }
+  };
+
+  const handleMapPacksStatusChange = (downloaded: number, total: number) => {
+    setMapPacksStatus({ downloaded, total });
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const result = await invoke<Project[]>('get_projects');
+      setProjects(result);
+    } catch (e) {
+      console.error('Failed to fetch projects:', e);
+    }
+  };
+
+  const handleCreateProject = async (name: string, description: string) => {
+    try {
+      await invoke('create_project', { name, description: description || null });
+      await fetchProjects(); // Refresh list
+      setShowCreateProject(false);
+    } catch (e) {
+      console.error('Failed to create project:', e);
+      throw e; // Re-throw to be handled by modal
+    }
+  };
+
+  const handleImportVideo = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: 'Video',
+            extensions: ['mp4', 'mov', 'avi', 'mkv'],
+          },
+        ],
+      });
+
+      if (selected) {
+        const videoPath = selected as string;
+        console.log('🎬 Starting import for:', videoPath);
+        setIsImporting(true);
+
+        // Import to default project (auto-creates if needed)
+        const result = await invoke('import_video', {
+          projectId: 'default',
+          videoPath,
+          gpsPath: null,
+        });
+
+        console.log('✅ Import successful:', result);
+        // Set active video path after successful import
+        setActiveVideoPath(videoPath);
+      }
+    } catch (e) {
+      console.error('❌ Import failed:', e);
+      alert(`Import failed: ${e}`);
+      setIsImporting(false);
+    }
+  };
+
+  const handleImportComplete = () => {
+    console.log('📝 Import complete callback triggered');
+    console.log('📹 Active video path:', activeVideoPath);
+
+    setIsImporting(false);
+
+    if (activeVideoPath) {
+      console.log('🎥 Navigating to editor for:', activeVideoPath);
+      setCurrentView('editor');
+    } else {
+      console.warn('⚠️ Import complete but no active video path set');
+    }
+  };
+
+  if (currentView === 'editor' && activeVideoPath) {
     return (
-        <div className="app">
-            <header className="app-header">
-                <div className="logo">
-                    <svg viewBox="0 0 24 24" className="logo-icon">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                    </svg>
-                    <h1>GeoTruth</h1>
-                </div>
-                <div className="status-bar">
-                    <span
-                        className={`status-indicator ${connectionStatus}`}
-                        title={`Mode: ${connectionStatus === 'online' ? 'Online' : 'Offline'}`}
-                    >
-                        {connectionStatus === 'checking' ? '⏳' : connectionStatus === 'online' ? '🌐' : '📴'}
-                    </span>
-                    <span className="version">v{appVersion || '...'}</span>
-                </div>
-            </header>
+      <EditorPage
+        videoPath={activeVideoPath}
+        onBack={() => {
+          setCurrentView('dashboard');
+          setActiveVideoPath(null);
+        }}
+      />
+    );
+  }
 
-            <main className="app-main">
-                <section className="welcome-section">
-                    <h2>Welcome to GeoTruth Narrative Engine</h2>
-                    <p className="subtitle">Turn raw travel footage into fact-checked, AI-narrated stories</p>
+  return (
+    <div className="app">
+      <header className="app-header">
+        <div className="logo">
+          <svg viewBox="0 0 24 24" className="logo-icon">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+          <h1>GeoTruth</h1>
+        </div>
+        <div className="status-bar">
+          <span
+            className={`status-indicator ${connectionStatus}`}
+            title={`Mode: ${connectionStatus === 'online' ? 'Online' : 'Offline'}`}
+          >
+            {connectionStatus === 'checking' ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : connectionStatus === 'online' ? (
+              <Globe className="w-5 h-5" />
+            ) : (
+              <WifiOff className="w-5 h-5" />
+            )}
+          </span>
+          <span className="version">v{appVersion || '...'}</span>
+        </div>
+      </header>
 
-                    <div className="feature-cards">
-                        <div className="feature-card clickable" onClick={handleImportVideo}>
-                            <div className="feature-icon">🎥</div>
-                            <h3>Import Video</h3>
-                            <p>Drag & drop your travel footage with GPS data</p>
-                        </div>
-                        <div className="feature-card">
-                            <div className="feature-icon">🔍</div>
-                            <h3>Verify Facts</h3>
-                            <p>Automatically validate locations using geospatial databases</p>
-                        </div>
-                        <div className="feature-card">
-                            <div className="feature-icon">🤖</div>
-                            <h3>AI Narration</h3>
-                            <p>Generate fact-checked scripts for your videos</p>
-                        </div>
-                    </div>
+      <main className="app-main">
+        <section className="welcome-section">
+          <h2>Welcome to GeoTruth Narrative Engine</h2>
+          <p className="subtitle">Turn raw travel footage into fact-checked, AI-narrated stories</p>
 
-                    {/* <div className="action-buttons">
+          <div className="feature-cards">
+            <div className="feature-card clickable" onClick={handleImportVideo}>
+              <div className="feature-icon">
+                <Video className="w-12 h-12 text-[var(--color-accent-primary)]" />
+              </div>
+              <h3>Import Video</h3>
+              <p>Drag & drop your travel footage with GPS data</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">
+                <Search className="w-12 h-12 text-[var(--color-accent-secondary)]" />
+              </div>
+              <h3>Verify Facts</h3>
+              <p>Automatically validate locations using geospatial databases</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">
+                <Bot className="w-12 h-12 text-[var(--color-accent)]" />
+              </div>
+              <h3>AI Narration</h3>
+              <p>Generate fact-checked scripts for your videos</p>
+            </div>
+          </div>
+
+          {/* <div className="action-buttons">
                         <button className="primary-button" disabled>
                             <span className="button-icon">📁</span>
                             Import Project
@@ -200,81 +215,78 @@ function App() {
                         </button>
                     </div> */}
 
-                    <div className="mt-12">
-                        <ProjectList
-                            projects={projects}
-                            onCreateProject={() => setShowCreateProject(true)}
-                            onSelectProject={(p) => {
-                                console.log('Selected project:', p);
-                                // Future: filter dashboard by project or open project view
-                            }}
-                        />
-                    </div>
-                </section>
-
-                <section className="status-section">
-                    <h3>System Status</h3>
-                    <div className="status-grid">
-                        <div className="status-item">
-                            <span className="status-label">Mode</span>
-                            <span className={`status-value ${connectionStatus}`}>
-                                {connectionStatus === 'checking'
-                                    ? 'Checking...'
-                                    : connectionStatus === 'online'
-                                        ? 'Online (Docker API)'
-                                        : 'Offline (Local)'}
-                            </span>
-                        </div>
-                        <div className="status-item">
-                            <span className="status-label">Processing</span>
-                            <span className="status-value ready">Ready</span>
-                        </div>
-                        <div
-                            className="status-item clickable"
-                            onClick={() => setShowMapPacks(true)}
-                            title="Click to manage map packs"
-                        >
-                            <span className="status-label">Map Packs</span>
-                            <span className={`status-value ${mapPacksStatus.downloaded > 0 ? 'ready' : ''}`}>
-                                {mapPacksStatus.total === 0
-                                    ? 'Loading...'
-                                    : mapPacksStatus.downloaded === 0
-                                        ? 'Not Downloaded'
-                                        : `${mapPacksStatus.downloaded}/${mapPacksStatus.total} Downloaded`}
-                            </span>
-                        </div>
-                    </div>
-                    <button className="retry-button" onClick={checkConnection}>
-                        🔄 Refresh Connection
-                    </button>
-                </section>
-            </main>
-
-            <footer className="app-footer">
-                <p>
-                    <strong>Privacy First:</strong> All video processing happens locally on your machine.
-                </p>
-            </footer>
-
-            <MapPacksModal
-                isOpen={showMapPacks}
-                onClose={() => setShowMapPacks(false)}
-                onStatusChange={handleMapPacksStatusChange}
+          <div className="mt-12">
+            <ProjectList
+              projects={projects}
+              onCreateProject={() => setShowCreateProject(true)}
+              onSelectProject={(p) => {
+                console.log('Selected project:', p);
+                // Future: filter dashboard by project or open project view
+              }}
             />
+          </div>
+        </section>
 
-            <ImportProgressModal
-                isOpen={isImporting}
-                onComplete={handleImportComplete}
-            />
+        <section className="status-section">
+          <h3>System Status</h3>
+          <div className="status-grid">
+            <div className="status-item">
+              <span className="status-label">Mode</span>
+              <span className={`status-value ${connectionStatus}`}>
+                {connectionStatus === 'checking'
+                  ? 'Checking...'
+                  : connectionStatus === 'online'
+                    ? 'Online (Docker API)'
+                    : 'Offline (Local)'}
+              </span>
+            </div>
+            <div className="status-item">
+              <span className="status-label">Processing</span>
+              <span className="status-value ready">Ready</span>
+            </div>
+            <div
+              className="status-item clickable"
+              onClick={() => setShowMapPacks(true)}
+              title="Click to manage map packs"
+            >
+              <span className="status-label">Map Packs</span>
+              <span className={`status-value ${mapPacksStatus.downloaded > 0 ? 'ready' : ''}`}>
+                {mapPacksStatus.total === 0
+                  ? 'Loading...'
+                  : mapPacksStatus.downloaded === 0
+                    ? 'Not Downloaded'
+                    : `${mapPacksStatus.downloaded}/${mapPacksStatus.total} Downloaded`}
+              </span>
+            </div>
+          </div>
+          <button className="retry-button" onClick={checkConnection}>
+            <RefreshCw className="w-4 h-4 inline-block mr-2" />
+            Refresh Connection
+          </button>
+        </section>
+      </main>
 
-            <CreateProjectModal
-                isOpen={showCreateProject}
-                onClose={() => setShowCreateProject(false)}
-                onSubmit={handleCreateProject}
-            />
-        </div>
-    );
+      <footer className="app-footer">
+        <p>
+          <strong>Privacy First:</strong> All video processing happens locally on your machine.
+        </p>
+      </footer>
+
+      <MapPacksModal
+        isOpen={showMapPacks}
+        onClose={() => setShowMapPacks(false)}
+        onStatusChange={handleMapPacksStatusChange}
+      />
+
+      <ImportProgressModal isOpen={isImporting} onComplete={handleImportComplete} />
+
+      <CreateProjectModal
+        isOpen={showCreateProject}
+        onClose={() => setShowCreateProject(false)}
+        onSubmit={handleCreateProject}
+      />
+    </div>
+  );
 }
 
 export default App;
-
