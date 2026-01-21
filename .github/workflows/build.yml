@@ -83,7 +83,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: desktop/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -105,10 +105,9 @@ jobs:
             librsvg2-dev \
             patchelf
       
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: |
-          cd desktop
-          pnpm install --frozen-lockfile || pnpm install
+          pnpm install --frozen-lockfile
       
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
